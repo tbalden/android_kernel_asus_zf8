@@ -1013,7 +1013,7 @@ static void do_write_event_worker(struct work_struct *work)
 		ksys_chown(ASUS_EVTLOG_PATH ".txt", AID_SDCARD_RW, AID_SDCARD_RW);
 
 		size = ksys_lseek(g_hfileEvtlog, 0, SEEK_END);
-		if (size >= SZ_512K) {
+		if (size >= SZ_8M) {
 			ksys_close(g_hfileEvtlog);
 			ksys_unlink(ASUS_EVTLOG_PATH "_old.txt");
 			sys_rename1(ASUS_EVTLOG_PATH ".txt", ASUS_EVTLOG_PATH "_old.txt");
@@ -1467,8 +1467,11 @@ static ssize_t asusdebug_read(struct file *file, char __user *buf,
 }
 
 #include <linux/reboot.h>
+#include <linux/qcom_scm.h>
 extern int rtc_ready;
 int asus_asdf_set = 0;
+int asus_dump_type = QCOM_DOWNLOAD_MINIDUMP;//0x20
+
 static ssize_t asusdebug_write(struct file *file, const char __user *buf, size_t count, loff_t *ppos)
 {
 	u8 messages[256] = { 0 };
@@ -1527,6 +1530,12 @@ static ssize_t asusdebug_write(struct file *file, const char __user *buf, size_t
 		delta_all_thread_info();
 		save_phone_hang_log(1);
 		return count;
+	} else if (strncmp(messages, "full", strlen("full")) == 0) {
+		printk("[ABSP] fulldump\n");
+		asus_dump_type = QCOM_DOWNLOAD_FULLDUMP;
+	} else if (strncmp(messages, "mini", strlen("mini")) == 0) {
+		printk("[ABSP] minidump\n");
+		asus_dump_type = QCOM_DOWNLOAD_MINIDUMP;
 	}
 
 	return count;

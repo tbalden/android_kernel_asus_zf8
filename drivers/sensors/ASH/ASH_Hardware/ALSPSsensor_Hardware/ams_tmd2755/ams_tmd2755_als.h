@@ -57,6 +57,8 @@
 
 #define TMD2755_SATURATION_THRESHOLD (9) /* 90% of max ALS count */
 
+#define TMD2755_CH0_MAXIMUM (65535)
+
 #define TMD2755_AUTO_GAIN_CLAMP_CNT	(8)
 
 #define TMD2755_SHIFT_MULT_BY_1024    (10)

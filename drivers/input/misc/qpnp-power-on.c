@@ -1226,7 +1226,13 @@ static struct qpnp_pon_config *qpnp_get_cfg(struct qpnp_pon *pon, u32 pon_type)
 
 	return NULL;
 }
-
+#ifdef CONFIG_MACH_ASUS
+#include <linux/qcom_scm.h> //import QCOM_DOWNLOAD_FULLDUMP
+//#include <linux/reboot.h> //import panic(..)
+#include "linux/asusdebug.h" //import asus_dump_type
+extern unsigned int vol_up_press;
+unsigned int vol_down_press_count = 0;
+#endif
 static int qpnp_pon_input_dispatch(struct qpnp_pon *pon, u32 pon_type)
 {
 	struct qpnp_pon_config *cfg = NULL;
@@ -1316,6 +1322,27 @@ static int qpnp_pon_input_dispatch(struct qpnp_pon *pon, u32 pon_type)
 	key_status = pon_rt_sts & pon_rt_bit;
 
 #ifdef CONFIG_MACH_ASUS
+	printk("[keypad][qpnp-power-on.c] keycode=%d, state=%s\n", cfg->key_code, key_status?"press":"release");//ASUS BSP +++
+	if(cfg->key_code == 114) { //volume down
+		if (vol_up_press) {
+			if (key_status > 0)
+				vol_down_press_count++;
+			pr_info("[ABSP][Debug] vol_down_press_count = %d\r\n",vol_down_press_count);
+			if (vol_down_press_count == 10) {
+			#ifdef ASUS_USER_BUILD
+				printk("[ABSP][keypad][qpnp-power-on.c] asus_dump_type is 0x%02x\n", asus_dump_type);
+				if( asus_dump_type == QCOM_DOWNLOAD_FULLDUMP) {
+					panic("special panic/zf8 in user build...\r\n");
+				} else {
+					printk("[ABSP][keypad][qpnp-power-on.c] not full ramdump and skip user build panic\n");
+				}
+			#else
+				panic("special panic/zf8 in debug build...\r\n");
+			#endif
+			}
+		}
+	}
+
 	if (boot_after_60sec) {
 		if (cfg->key_code == 114) {
 			if (key_status) 
@@ -1327,8 +1354,8 @@ static int qpnp_pon_input_dispatch(struct qpnp_pon *pon, u32 pon_type)
 			}
 		}
 	}
-	printk("[keypad][qpnp-power-on.c] keycode=%d, state=%s\n", cfg->key_code, key_status?"press":"release");//ASUS BSP Hank +++
 #endif
+
 	if (pon->kpdpwr_dbc_enable && cfg->pon_type == PON_KPDPWR) {
 		if (!key_status)
 			pon->kpdpwr_last_release_time = ktime_get();

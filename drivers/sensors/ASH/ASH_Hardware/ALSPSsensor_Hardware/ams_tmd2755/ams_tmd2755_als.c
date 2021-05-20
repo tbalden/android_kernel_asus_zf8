@@ -278,10 +278,11 @@ static int tmd2755_update_als_threshold(struct tmd2755_chip *chip, enum tmd2755_
 		else
 			from = 0;
 
-		if (cur < (saturation - deltaP))
-			to = cur + deltaP;
-		else
-			to = saturation;
+		to = cur + deltaP;
+		/* prevent high threshold overflow */
+		if(to > TMD2755_CH0_MAXIMUM){
+			to = TMD2755_CH0_MAXIMUM;
+		}
 	}
 	
 	*((__le16 *) &chip->shadow[TMD2755_REG_AILTL]) = cpu_to_le16(from);
@@ -469,8 +470,8 @@ int tmd2755_configure_als_mode(struct tmd2755_chip *chip, u8 state)
 		/* AWTIME */
 		ams_i2c_write(client, sh, TMD2755_REG_AWTIME, chip->params.als_wtime);
 
-		/* Enable ALS interrupt and ALS Sat Interrupt */
-		ams_i2c_modify(client, sh, TMD2755_REG_INTENAB, TMD2755_AIEN | TMD2755_ASIEN, TMD2755_AIEN | TMD2755_ASIEN);
+		/* Enable ALS interrupt */
+		ams_i2c_modify(client, sh, TMD2755_REG_INTENAB, TMD2755_AIEN, TMD2755_AIEN);
 		/* When enabling ALS - AEN in Register 0x80, PWEN must be set to 1 if prox is enabled - See datasheet */
 		/* As of release 1.9, PWEN is active when proximity is turned oa - see ams_tmd2755_prox.c filen */
 		/* Also Power On */
@@ -487,7 +488,7 @@ int tmd2755_configure_als_mode(struct tmd2755_chip *chip, u8 state)
 		dev_info(&chip->client->dev, "%*.*s():%*d --> Disable ALS\n",
 			MIN_KERNEL_LOG_LEN, MAX_KERNEL_LOG_LEN, __func__, LINE_NUM_KERNEL_LOG_LEN, __LINE__);
 
-		ams_i2c_modify(client, sh, TMD2755_REG_INTENAB, TMD2755_AIEN | TMD2755_ASIEN, 0);
+		ams_i2c_modify(client, sh, TMD2755_REG_INTENAB, TMD2755_AIEN, 0);
 		/* Cannot turn off PWEN, in case prox feature is still using it */
 		ams_i2c_modify(client, sh, TMD2755_REG_ENABLE, TMD2755_AEN, 0);
 		chip->als_enable = false;

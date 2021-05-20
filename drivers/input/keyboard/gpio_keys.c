@@ -359,7 +359,10 @@ static struct attribute *gpio_keys_attrs[] = {
 	NULL,
 };
 ATTRIBUTE_GROUPS(gpio_keys);
+
 #ifdef CONFIG_MACH_ASUS
+unsigned int vol_up_press = 0;
+extern unsigned int vol_down_press_count;
 unsigned int b_press = 0; //ASUS_BSP : Wei_Lai
 #endif
 
@@ -376,9 +379,29 @@ static void gpio_keys_gpio_report_event(struct gpio_button_data *bdata)
 			"failed to get gpio state: %d\n", state);
 		return;
 	}
+
 #ifdef CONFIG_MACH_ASUS
-	if(type == EV_KEY)
+	if(type == EV_KEY) {
+		if(button->code == 115) {
 			printk("[keypad][gpio_keys.c] keycode=%d, state=%s\n", button->code, state?"press":"release");
+			if (state > 0) {
+				//if (g_startlog) {
+					vol_up_press = 1;
+				//}
+			}
+			else {
+				vol_up_press = 0;
+				if(vol_down_press_count != 0) {
+					printk("[keypad][gpio_keys.c] vol down (keycode=114) count = %d\n", vol_down_press_count);
+					vol_down_press_count = 0;
+				}
+			}
+		}
+		else {
+			pr_info("[keypad] %s: keycode=%d, state=%s\n",
+					__func__, button->code, state?"press":"release");
+		}
+	}
 #endif
 
 	if (type == EV_ABS) {

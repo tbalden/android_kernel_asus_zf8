@@ -1085,7 +1085,7 @@ void dsi_zf8_record_backlight(u32 bl_lvl)
 	g_display->panel->panel_last_backlight = bl_lvl;
 	//#define SDE_MODE_DPMS_LP1	1      sde_drm.h
 	// skip if fod hbm is processing
-	if ((g_display->panel->power_mode == 1  || g_display->panel->power_mode == 2)&& !g_display->panel->allow_panel_fod_hbm) {
+	if (g_display->panel->power_mode == 1 && !g_display->panel->allow_panel_fod_hbm) {
 		//DSI_LOG("AOD last_backlight = %d \n", g_display->panel->panel_last_backlight);
 		DSI_LOG("Will enter AOD Mode !\n");
 		if(g_display->panel->panel_last_backlight > 4) {

@@ -630,6 +630,7 @@ static int fts_input_report_b(struct fts_ts_data *data)
                 FTS_INFO("reset tp");
                 fts_irq_disable();
                 fts_reset_proc(200);
+                fts_ex_fun_recovery(data);
                 fts_irq_enable();
             }
         } else {

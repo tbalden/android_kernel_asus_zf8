@@ -53,10 +53,7 @@
 #define WLS_FW_UPDATE_TIME_MS		1000
 #define WLS_FW_BUF_SIZE			128
 #define DEFAULT_RESTRICT_FCC_UA		1000000
-#ifdef CONFIG_MACH_ASUS
-extern void qti_charge_notify_device_charge(void);
-extern void qti_charge_notify_device_not_charge(void);
-#endif
+
 #ifdef CONFIG_MACH_ASUS
 //Move to battery_charger.h
 #else
@@ -668,14 +665,6 @@ static void battery_chg_update_usb_type_work(struct work_struct *work)
 		bcdev->usb_icl_ua = 0;
 
 	pr_debug("usb_adap_type: %u\n", pst->prop[USB_ADAP_TYPE]);
- 
- #ifdef CONFIG_MACH_ASUS       
-	if (pst->prop[USB_ONLINE]) {
-	    qti_charge_notify_device_charge();
-	} else if (!pst->prop[USB_ONLINE]) {
-	    qti_charge_notify_device_not_charge();
-	}
-#endif
 	
 	switch (pst->prop[USB_ADAP_TYPE]) {
 	case POWER_SUPPLY_USB_TYPE_SDP:

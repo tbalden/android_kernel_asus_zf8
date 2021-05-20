@@ -71,4 +71,5 @@ void ASUSErclog(const char * filename, const char *fmt, ...);//Record the import
 void SubSysHealthRecord(const char *fmt, ...);/*AS-K SubSys Health Record+*/
 //20101202_Bruno: added to get debug mask value
 bool isASUS_MSK_set(const char *fmt);
+extern int asus_dump_type;
 #endif

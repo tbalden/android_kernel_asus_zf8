@@ -391,7 +391,11 @@ static int tmd2755_ALSPS_hw_get_interrupt()
 	AMS_MUTEX_LOCK(&chip->lock);
 	ret = ams_i2c_read(chip->client, TMD2755_REG_STATUS, &chip->shadow[TMD2755_REG_STATUS]);
 	status = chip->shadow[TMD2755_REG_STATUS];
-	log("Enter 0x94=0x%x", status);
+
+	if((status & 0x80) == 0){
+		log("Enter 0x94=0x%x", status);
+	}
+
 	if((status & 0x28) == 0x28){
 		status = status & 0xdf;
 		log("Psensor Cal & normal irq trigger at the same part, skip normal irq, 0x94=0x%x", status);
@@ -411,7 +415,7 @@ static int tmd2755_ALSPS_hw_get_interrupt()
 	/*************/
 	if (status & TMD2755_INT_ST_ALS_SAT_IRQ) {
 		if(1 != chip->in_asat){
-			dev_err(dev, "%*.*s():%*d --> ALS Saturation Interrupt occurred\n",
+			dev_dbg(dev, "%*.*s():%*d --> ALS Saturation Interrupt occurred\n",
 				MIN_KERNEL_LOG_LEN, MAX_KERNEL_LOG_LEN, __func__, LINE_NUM_KERNEL_LOG_LEN, __LINE__);
 			chip->in_asat = 1;
 		}

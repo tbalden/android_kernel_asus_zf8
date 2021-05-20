@@ -3909,6 +3909,7 @@ static ssize_t aw8697_mem_play_store(struct device *dev,
 #endif
 	unsigned int val = 0;
 	int rc = 0;
+	unsigned char reg_val = 0;
 
 	rc = kstrtouint(buf, 0, &val);
 	if (rc < 0) {
@@ -3918,6 +3919,12 @@ static ssize_t aw8697_mem_play_store(struct device *dev,
 	pr_info("%s: waveform id == %d\n", __func__, val);
 
 	mutex_lock(&aw8697->lock);
+	aw8697_i2c_read(aw8697, AW8697_REG_GO, &reg_val);
+	if ((reg_val & 01) == 1) {
+		pr_err("%s: waveform stop ,return", __func__);
+		goto mem_play_store_brk1;
+	}
+
 	if(val == 0) {
 		pr_err("%s: waveform id sould not set to 0 in current function!\n", __func__);
 		goto mem_play_store_brk1;

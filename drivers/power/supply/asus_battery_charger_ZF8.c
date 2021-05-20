@@ -47,6 +47,9 @@ extern int asus_extcon_get_state(struct extcon_dev *edev);
 extern bool g_Charger_mode;
 //[---] Add the external function
 
+extern void qti_charge_notify_device_charge(void);
+extern void qti_charge_notify_device_not_charge(void);
+
 #if defined ASUS_VODKA_PROJECT
 void tight_camera_motor(void);
 #endif
@@ -100,6 +103,8 @@ static bool g_cyclecount_initialized = false;
 struct bat_safety_condition{
     unsigned long condition1_battery_time;
     unsigned long condition2_battery_time;
+    unsigned long condition3_battery_time;
+    unsigned long condition4_battery_time;
     int condition1_cycle_count;
     int condition2_cycle_count;
     unsigned long condition1_temp_vol_time;
@@ -122,6 +127,12 @@ static struct CYCLE_COUNT_DATA g_cycle_count_data = {
     .reload_condition = 0
 };
 struct delayed_work battery_safety_work;
+
+#if defined ASUS_VODKA_PROJECT
+#define INIT_FV 4360
+#else
+#define INIT_FV 4450
+#endif
 //ASUS_BSP battery safety upgrade ---
 
 //ASUS_BS battery health upgrade +++
@@ -991,7 +1002,7 @@ static ssize_t smartchg_slow_charging_store(struct class *c,
     CHG_DBG("%s. slow charging : %d", __func__, tmp);
     if(asus_usb_online){
         cancel_delayed_work(&asus_slow_charging_work);
-        schedule_delayed_work(&asus_slow_charging_work, 60 * HZ);
+        schedule_delayed_work(&asus_slow_charging_work, 0 * HZ);
         __pm_wakeup_event(slowchg_ws, 60 * 1000);
     }
 
@@ -1127,17 +1138,8 @@ static ssize_t virtual_thermal_store(struct class *c,
                     struct class_attribute *attr,
                     const char *buf, size_t count)
 {
-    int rc;
     u32 tmp;
     tmp = simple_strtol(buf, NULL, 10);
-
-    if(virtual_thermal/1000 != tmp/1000){
-        CHG_DBG_E("%s. set BATTMAN_OEM_THERMAL_SENSOR : %d", __func__, tmp);
-        rc = oem_prop_write(BATTMAN_OEM_THERMAL_SENSOR, &tmp, 1);
-        if (rc < 0) {
-            pr_err("Failed to set BATTMAN_OEM_THERMAL_SENSOR rc=%d\n", rc);
-        }
-    }
 
     virtual_thermal = tmp;
 
@@ -1150,6 +1152,47 @@ static ssize_t virtual_thermal_show(struct class *c,
     return scnprintf(buf, PAGE_SIZE, "%d\n", virtual_thermal);
 }
 static CLASS_ATTR_RW(virtual_thermal);
+
+static ssize_t set_virtualthermal_store(struct class *c,
+                    struct class_attribute *attr,
+                    const char *buf, size_t count)
+{
+    int mask;
+    mask = simple_strtol(buf, NULL, 16);
+    ChgPD_Info.thermel_threshold = mask;
+    CHG_DBG_E("%s thermel threshold=%d", __func__, mask);
+
+    return count;
+}
+
+static ssize_t set_virtualthermal_show(struct class *c,
+                    struct class_attribute *attr, char *buf)
+{
+    return scnprintf(buf, PAGE_SIZE, "No function\n");
+}
+static CLASS_ATTR_RW(set_virtualthermal);
+
+static ssize_t boot_completed_store(struct class *c,
+                    struct class_attribute *attr,
+                    const char *buf, size_t count)
+{
+    u32 tmp;
+    tmp = simple_strtol(buf, NULL, 10);
+
+    ChgPD_Info.boot_completed = tmp;
+
+    cancel_delayed_work(&asus_set_qc_state_work);
+    schedule_delayed_work(&asus_set_qc_state_work, msecs_to_jiffies(5000));
+
+    return count;
+}
+
+static ssize_t boot_completed_show(struct class *c,
+                    struct class_attribute *attr, char *buf)
+{
+    return scnprintf(buf, PAGE_SIZE, "%d\n", ChgPD_Info.boot_completed);
+}
+static CLASS_ATTR_RW(boot_completed);
 
 static struct attribute *asuslib_class_attrs[] = {
     &class_attr_asus_get_FG_SoC.attr,
@@ -1176,6 +1219,8 @@ static struct attribute *asuslib_class_attrs[] = {
     &class_attr_ultra_bat_life.attr,
     &class_attr_chg_disable_jeita.attr,
     &class_attr_virtual_thermal.attr,
+    &class_attr_set_virtualthermal.attr,
+    &class_attr_boot_completed.attr,
     NULL,
 };
 ATTRIBUTE_GROUPS(asuslib_class);
@@ -1242,54 +1287,28 @@ void asus_usb_thermal_worker(struct work_struct *work)
 
 void asus_thermal_policy_worker(struct work_struct *work)
 {
-    int rc, wp_temp;
+    int rc;
     u32 tmp;
 
-    wp_temp = virtual_thermal;
-
-    CHG_DBG("thermal policy asus_wp_temp => %d \n",wp_temp);
-
-#if defined ASUS_VODKA_PROJECT
     if(ChgPD_Info.panel_status){
-        if(wp_temp >= 33000)
+        if(ChgPD_Info.thermel_threshold >= 1)
         {
-            policy_state = THERMAL_LARGER_THAN_UPPER;
+                policy_state = THERMAL_LARGER_THAN_UPPER;
         }
-        else if (wp_temp < 32000)
+        else if (ChgPD_Info.thermel_threshold < 1)
         {
-            policy_state = THERMAL_LESS_THAN_LOWER;
+                policy_state = THERMAL_LESS_THAN_LOWER;
         }
     }else{
-        if(wp_temp >= 37000)
+        if(ChgPD_Info.thermel_threshold >= 3)
         {
-            policy_state = THERMAL_LARGER_THAN_UPPER;
+                policy_state = THERMAL_LARGER_THAN_UPPER;
         }
-        else if (wp_temp < 33000)
+        else if (ChgPD_Info.thermel_threshold < 3)
         {
-            policy_state = THERMAL_LESS_THAN_LOWER;
-        }
-    }
-#else
-    if(ChgPD_Info.panel_status){
-        if(wp_temp >= 35000)
-        {
-            policy_state = THERMAL_LARGER_THAN_UPPER;
-        }
-        else if (wp_temp < 34000)
-        {
-            policy_state = THERMAL_LESS_THAN_LOWER;
-        }
-    }else{
-        if(wp_temp >= 39000)
-        {
-            policy_state = THERMAL_LARGER_THAN_UPPER;
-        }
-        else if (wp_temp < 35000)
-        {
-            policy_state = THERMAL_LESS_THAN_LOWER;
+                policy_state = THERMAL_LESS_THAN_LOWER;
         }
     }
-#endif
 
     if(policy_state != policy_state_pre){
         policy_state_pre = policy_state;
@@ -1443,7 +1462,7 @@ static void handle_notification(struct battery_chg_dev *bcdev, void *data,
             }else if(work_event_msg->work == WORK_JEITA_CC){
                 if(work_event_msg->data_buffer[0] == 1){
                     cancel_delayed_work(&asus_jeita_cc_work);
-                    schedule_delayed_work(&asus_jeita_cc_work, 10 * HZ);
+                    schedule_delayed_work(&asus_jeita_cc_work, 5 * HZ);
                 }else{
                     cancel_delayed_work(&asus_jeita_cc_work);
                 }
@@ -1763,7 +1782,9 @@ void asus_set_qc_state_worker(struct work_struct *work)
         pr_err("Failed to get CHG_LIMIT_EN rc=%d\n", rc);
     }
 
-    if(ChgPD_Info.AdapterVID == 0xB05 && !VID_changed && g_SWITCH_LEVEL == SWITCH_LEVEL3_QUICK_CHARGING){
+    CHG_DBG("%s: VID=%d, level=%d, boot=%d\n", __func__, ChgPD_Info.AdapterVID, g_SWITCH_LEVEL, ChgPD_Info.boot_completed);
+    if(ChgPD_Info.AdapterVID == 0xB05 && !VID_changed &&
+        g_SWITCH_LEVEL == SWITCH_LEVEL3_QUICK_CHARGING && ChgPD_Info.boot_completed){
         CHG_DBG_E("%s:  report 30W pps \n", __func__);
         VID_changed = true;
         asus_extcon_set_state_sync(quickchg_extcon, 101);//ASUS 30W
@@ -1878,7 +1899,7 @@ static void asus_jeita_cc_worker(struct work_struct *dat){
     }
 
     cancel_delayed_work(&asus_jeita_cc_work);
-    schedule_delayed_work(&asus_jeita_cc_work, 10 * HZ);
+    schedule_delayed_work(&asus_jeita_cc_work, 5 * HZ);
 }
 
 static void asus_panel_check_worker(struct work_struct *dat){
@@ -1960,19 +1981,20 @@ void asus_monitor_start(int status){
 
         if(!g_Charger_mode){
             cancel_delayed_work(&asus_panel_check_work);
-            schedule_delayed_work(&asus_panel_check_work, 60 * HZ);
+            schedule_delayed_work(&asus_panel_check_work, 62 * HZ);
         }
 
         cancel_delayed_work(&asus_slow_charging_work);
-        schedule_delayed_work(&asus_slow_charging_work, 60 * HZ);
+        schedule_delayed_work(&asus_slow_charging_work, 0 * HZ);
 
         cancel_delayed_work(&asus_18W_workaround_work);
-        schedule_delayed_work(&asus_18W_workaround_work, 20 * HZ);
+        schedule_delayed_work(&asus_18W_workaround_work, 26 * HZ);
 
         cancel_delayed_work(&asus_thermal_policy_work);
-        schedule_delayed_work(&asus_thermal_policy_work, 60 * HZ);
+        schedule_delayed_work(&asus_thermal_policy_work, 68 * HZ);
         policy_state = THERMAL_NONE;
         policy_state_pre = THERMAL_NONE;
+        qti_charge_notify_device_charge();
         __pm_wakeup_event(slowchg_ws, 60 * 1000);
     }else{
         cancel_delayed_work(&asus_jeita_rule_work);
@@ -1982,6 +2004,7 @@ void asus_monitor_start(int status){
         cancel_delayed_work(&asus_slow_charging_work);
         cancel_delayed_work(&asus_18W_workaround_work);
         cancel_delayed_work(&asus_thermal_policy_work);
+        qti_charge_notify_device_not_charge();
         VID_changed = false;
     }
 }
@@ -1992,6 +2015,8 @@ static void init_battery_safety(struct bat_safety_condition *cond)
 {
     cond->condition1_battery_time = BATTERY_USE_TIME_CONDITION1;
     cond->condition2_battery_time = BATTERY_USE_TIME_CONDITION2;
+    cond->condition3_battery_time = BATTERY_USE_TIME_CONDITION3;
+    cond->condition4_battery_time = BATTERY_USE_TIME_CONDITION4;
     cond->condition1_cycle_count = CYCLE_COUNT_CONDITION1;
     cond->condition2_cycle_count = CYCLE_COUNT_CONDITION2;
     cond->condition1_temp_vol_time = HIGH_TEMP_VOL_TIME_CONDITION1;
@@ -2007,25 +2032,33 @@ static void set_full_charging_voltage(void)
     int rc;
     u32 tmp;
 
+#if defined ASUS_VODKA_PROJECT
     if(0 == g_cycle_count_data.reload_condition){
 
     }else if(1 == g_cycle_count_data.reload_condition){
-#if defined ASUS_VODKA_PROJECT
-        tmp = 4310;
-#else
-        tmp = 4360;
-#endif
-        CHG_DBG("%s. set BATTMAN_OEM_FV : %d", __func__, tmp);
-        rc = oem_prop_write(BATTMAN_OEM_FV, &tmp, 1);
-        if (rc < 0) {
-            pr_err("Failed to set BATTMAN_OEM_FV rc=%d\n", rc);
-        }
+        tmp = INIT_FV;
     }else if(2 == g_cycle_count_data.reload_condition){
-#if defined ASUS_VODKA_PROJECT
-        tmp = 4260;
+        tmp = INIT_FV;
+    }else if(3 == g_cycle_count_data.reload_condition){
+        tmp = INIT_FV - 50;
+    }else if(4 == g_cycle_count_data.reload_condition){
+        tmp = INIT_FV - 100;
+    }
 #else
-        tmp = 4310;
+    if(0 == g_cycle_count_data.reload_condition){
+
+    }else if(1 == g_cycle_count_data.reload_condition){
+        tmp = INIT_FV - 20;
+    }else if(2 == g_cycle_count_data.reload_condition){
+        tmp = INIT_FV - 50;
+    }else if(3 == g_cycle_count_data.reload_condition){
+        tmp = INIT_FV - 100;
+    }else if(4 == g_cycle_count_data.reload_condition){
+        tmp = INIT_FV - 150;
+    }
 #endif
+
+    if(0 != g_cycle_count_data.reload_condition){
         CHG_DBG("%s. set BATTMAN_OEM_FV : %d", __func__, tmp);
         rc = oem_prop_write(BATTMAN_OEM_FV, &tmp, 1);
         if (rc < 0) {
@@ -2077,9 +2110,9 @@ static int backup_bat_percentage(void)
 
     if(0 == g_cycle_count_data.reload_condition){
         bat_percent = 0;
-    }else if(1 == g_cycle_count_data.reload_condition){
+    }else if(3 == g_cycle_count_data.reload_condition){
         bat_percent = 95;
-    }else if(2 == g_cycle_count_data.reload_condition){
+    }else if(4 == g_cycle_count_data.reload_condition){
         bat_percent = 90;
     }
     sprintf(buf, "%d\n", bat_percent);
@@ -2209,7 +2242,7 @@ static void asus_judge_reload_condition(struct bat_safety_condition *safety_cond
     unsigned long local_battery_total_time = g_cycle_count_data.battery_total_time;
 
     temp_condition = g_cycle_count_data.reload_condition;
-    if(temp_condition >= 2){ //if condition=2 will return
+    if(temp_condition >= 4){ //if condition=2 will return
         return ;
     }
 
@@ -2219,13 +2252,22 @@ static void asus_judge_reload_condition(struct bat_safety_condition *safety_cond
     //     return ;
 
     //1.judge battery using total time
-    if(local_battery_total_time >= safety_cond->condition2_battery_time){
-        g_cycle_count_data.reload_condition = 2;
+    if(local_battery_total_time >= safety_cond->condition4_battery_time){
+        g_cycle_count_data.reload_condition = 4;
         goto DONE;
+    }else if(local_battery_total_time >= safety_cond->condition3_battery_time &&
+        local_battery_total_time < safety_cond->condition4_battery_time){
+        g_cycle_count_data.reload_condition = 3;
+    }
+#if defined ASUS_SAKE_PROJECT
+    else if(local_battery_total_time >= safety_cond->condition2_battery_time &&
+        local_battery_total_time < safety_cond->condition3_battery_time){
+        g_cycle_count_data.reload_condition = 2;
     }else if(local_battery_total_time >= safety_cond->condition1_battery_time &&
         local_battery_total_time < safety_cond->condition2_battery_time){
         g_cycle_count_data.reload_condition = 1;
     }
+#endif
 
     //2. judge battery cycle count
     cycle_count = g_cycle_count_data.cycle_count;
@@ -2251,20 +2293,20 @@ static void asus_judge_reload_condition(struct bat_safety_condition *safety_cond
 
     //4. judge high temp condition
     if(local_high_temp_time >= safety_cond->condition2_temp_time){
-        g_cycle_count_data.reload_condition = 2;
+        g_cycle_count_data.reload_condition = 4;
         goto DONE;
     }else if(local_high_temp_time >= safety_cond->condition1_temp_time &&
         local_high_temp_time < safety_cond->condition2_temp_time){
-        g_cycle_count_data.reload_condition = 1;
+        g_cycle_count_data.reload_condition = 3;
     }
 
     //5. judge high voltage condition
     if(local_high_vol_time >= safety_cond->condition2_vol_time){
-        g_cycle_count_data.reload_condition = 2;
+        g_cycle_count_data.reload_condition = 4;
         goto DONE;
     }else if(local_high_vol_time >= safety_cond->condition1_vol_time &&
         local_high_vol_time < safety_cond->condition2_vol_time){
-        g_cycle_count_data.reload_condition = 1;
+        g_cycle_count_data.reload_condition = 3;
     }
 
 DONE:
@@ -2855,6 +2897,8 @@ static int condition_value_proc_show(struct seq_file *buf, void *data)
     seq_printf(buf, "---show condition value---\n");
     seq_printf(buf, "condition1 battery time %lu\n", safety_cond.condition1_battery_time);
     seq_printf(buf, "condition2 battery time %lu\n", safety_cond.condition2_battery_time);
+    seq_printf(buf, "condition3 battery time %lu\n", safety_cond.condition3_battery_time);
+    seq_printf(buf, "condition4 battery time %lu\n", safety_cond.condition4_battery_time);
     seq_printf(buf, "condition1 cycle count %d\n", safety_cond.condition1_cycle_count);
     seq_printf(buf, "condition2 cycle count %d\n", safety_cond.condition2_cycle_count);
     seq_printf(buf, "condition1 temp time %lu\n", safety_cond.condition1_temp_time);
@@ -2877,6 +2921,8 @@ static ssize_t condition_value_proc_write(struct file *file,const char __user *b
     int value = 0;
     unsigned long condition1_time = 0;
     unsigned long condition2_time = 0;
+    unsigned long condition3_time = 0;
+    unsigned long condition4_time = 0;
     char buf[320];
     char *start = buf;
 
@@ -2887,10 +2933,19 @@ static ssize_t condition_value_proc_write(struct file *file,const char __user *b
     buf[count] = 0;
 
     sscanf(start, "%d", &value);
-    while (*start++ != ' ');
-    sscanf(start, "%lu", &condition1_time);
-    while (*start++ != ' ');
-    sscanf(start, "%lu", &condition2_time);
+
+    if(value != 0 && start - buf < count){
+        while (*start++ != ' ');
+        sscanf(start, "%lu", &condition1_time);
+        while (*start++ != ' ');
+        sscanf(start, "%lu", &condition2_time);
+    }
+    if(value == 1 && start - buf < count){
+        while (*start++ != ' ');
+        sscanf(start, "%lu", &condition3_time);
+        while (*start++ != ' ');
+        sscanf(start, "%lu", &condition4_time);
+    }
 
     if(value && condition2_time <= condition1_time){
         CHG_DBG_E("[BAT][CHG]%s input value error,please input correct value!\n", __func__);
@@ -2905,6 +2960,8 @@ static ssize_t condition_value_proc_write(struct file *file,const char __user *b
         case 1:
             safety_cond.condition1_battery_time = condition1_time;
             safety_cond.condition2_battery_time = condition2_time;
+            safety_cond.condition3_battery_time = condition3_time;
+            safety_cond.condition4_battery_time = condition4_time;
         break;
         case 2:
             safety_cond.condition1_cycle_count = (int)condition1_time;

@@ -70,6 +70,8 @@ struct ADSP_ChargerPD_Info {
     u32     chg_disable_jeita;
     bool    panel_status;
     int     jeita_cc_state;
+    int     thermel_threshold;
+    int     boot_completed;
 };
 
 struct battman_oem_read_buffer_req_msg { 
@@ -234,7 +236,7 @@ struct ADSP_ChargerPD_Info ChgPD_Info;
 #if defined ASUS_VODKA_PROJECT
 char st_battery_name[64] = "C11P1904.O.03.0001.30.03.32.1";
 #else
-char st_battery_name[64] = "C11P2003.O.01.0001.30.03.32.31";
+char st_battery_name[64] = "C11P2003.O.01.0001.30.10.46.57";
 #endif
 
 ssize_t oem_prop_read(enum battman_oem_property prop, size_t count);

@@ -30,6 +30,7 @@
 
 static struct wm_adsp_ops cs35l45_halo_ops;
 static int (*cs35l45_halo_start_core)(struct wm_adsp *dsp);
+static int cs35l45_gpio_configuration(struct cs35l45_private *cs35l45);
 
 static const char *cs35l45_fast_switch_text[] = {
 	"fast_switch1.txt",
@@ -499,6 +500,13 @@ static int cs35l45_dsp_boot_ev(struct snd_soc_dapm_widget *w,
 		ret = cs35l45_set_csplmboxcmd(cs35l45, mboxcmd);
 		if (ret < 0)
 			dev_err(cs35l45->dev, "MBOX failure (%d)\n", ret);
+		
+		ret = cs35l45_gpio_configuration(cs35l45);
+		if (ret < 0) {
+			dev_err(cs35l45->dev,
+				"Failed to apply GPIO config (%d)\n", ret);
+			return ret;
+		}
 		break;
 	case SND_SOC_DAPM_PRE_PMD:
 		regmap_update_bits(cs35l45->regmap,
@@ -1800,6 +1808,9 @@ static int cs35l45_component_probe(struct snd_soc_component *component)
 	struct snd_soc_dapm_context *dapm =
 			snd_soc_component_get_dapm(component);
 	int ret;
+	char widget[32];
+
+	dev_dbg(cs35l45->dev, "%s: name_prefix=%s\n", __func__, component->name_prefix);
 
 	cs35l45->dapm_mode = DAPM_MODE_ASP;
 
@@ -1808,15 +1819,112 @@ static int cs35l45_component_probe(struct snd_soc_component *component)
 
 	snd_soc_component_disable_pin(component, "RCV");
 	snd_soc_component_disable_pin(component, "DSP1 Enable");
-	snd_soc_dapm_ignore_suspend(dapm, "SPK Playback");
-	snd_soc_dapm_ignore_suspend(dapm, "SPK SPK");
-	snd_soc_dapm_ignore_suspend(dapm, "SPK RCV");
-	snd_soc_dapm_ignore_suspend(dapm, "SPK Capture");
 
-	snd_soc_dapm_ignore_suspend(dapm, "RCV Playback");
-	snd_soc_dapm_ignore_suspend(dapm, "RCV SPK");
-	snd_soc_dapm_ignore_suspend(dapm, "RCV RCV");
-	snd_soc_dapm_ignore_suspend(dapm, "RCV Capture");
+	if (component->name_prefix) {
+		snprintf(widget, sizeof(widget), "%s %s", component->name_prefix, "Capture");
+		snd_soc_dapm_ignore_suspend(dapm, widget);
+		snprintf(widget, sizeof(widget), "%s %s", component->name_prefix, "Playback");
+		snd_soc_dapm_ignore_suspend(dapm, widget);
+		snprintf(widget, sizeof(widget), "%s %s", component->name_prefix, "DSP1 Slave");
+		snd_soc_dapm_ignore_suspend(dapm, widget);
+		snprintf(widget, sizeof(widget), "%s %s", component->name_prefix, "DSP1 Master");
+		snd_soc_dapm_ignore_suspend(dapm, widget);
+		snprintf(widget, sizeof(widget), "%s %s", component->name_prefix, "GLOBAL_EN");
+		snd_soc_dapm_ignore_suspend(dapm, widget);
+		snprintf(widget, sizeof(widget), "%s %s", component->name_prefix, "ASPTX Ref");
+		snd_soc_dapm_ignore_suspend(dapm, widget);
+		snprintf(widget, sizeof(widget), "%s %s", component->name_prefix, "VMON");
+		snd_soc_dapm_ignore_suspend(dapm, widget);
+		snprintf(widget, sizeof(widget), "%s %s", component->name_prefix, "IMON");
+		snd_soc_dapm_ignore_suspend(dapm, widget);
+		snprintf(widget, sizeof(widget), "%s %s", component->name_prefix, "BATTMON");
+		snd_soc_dapm_ignore_suspend(dapm, widget);
+		snprintf(widget, sizeof(widget), "%s %s", component->name_prefix, "BSTMON");
+		snd_soc_dapm_ignore_suspend(dapm, widget);
+		snprintf(widget, sizeof(widget), "%s %s", component->name_prefix, "RCV_EN");
+		snd_soc_dapm_ignore_suspend(dapm, widget);
+		snprintf(widget, sizeof(widget), "%s %s", component->name_prefix, "ASP");
+		snd_soc_dapm_ignore_suspend(dapm, widget);
+		snprintf(widget, sizeof(widget), "%s %s", component->name_prefix, "ASP_RX1");
+		snd_soc_dapm_ignore_suspend(dapm, widget);
+		snprintf(widget, sizeof(widget), "%s %s", component->name_prefix, "ASP_RX2");
+		snd_soc_dapm_ignore_suspend(dapm, widget);
+		snprintf(widget, sizeof(widget), "%s %s", component->name_prefix, "ASP_TX1");
+		snd_soc_dapm_ignore_suspend(dapm, widget);
+		snprintf(widget, sizeof(widget), "%s %s", component->name_prefix, "ASP_TX2");
+		snd_soc_dapm_ignore_suspend(dapm, widget);
+		snprintf(widget, sizeof(widget), "%s %s", component->name_prefix, "ASP_TX3");
+		snd_soc_dapm_ignore_suspend(dapm, widget);
+		snprintf(widget, sizeof(widget), "%s %s", component->name_prefix, "ASP_TX4");
+		snd_soc_dapm_ignore_suspend(dapm, widget);
+		snprintf(widget, sizeof(widget), "%s %s", component->name_prefix, "ASP_TX1 Source");
+		snd_soc_dapm_ignore_suspend(dapm, widget);
+		snprintf(widget, sizeof(widget), "%s %s", component->name_prefix, "ASP_TX2 Source");
+		snd_soc_dapm_ignore_suspend(dapm, widget);
+		snprintf(widget, sizeof(widget), "%s %s", component->name_prefix, "ASP_TX3 Source");
+		snd_soc_dapm_ignore_suspend(dapm, widget);
+		snprintf(widget, sizeof(widget), "%s %s", component->name_prefix, "ASP_TX4 Source");
+		snd_soc_dapm_ignore_suspend(dapm, widget);
+		snprintf(widget, sizeof(widget), "%s %s", component->name_prefix, "AMP Enable");
+		snd_soc_dapm_ignore_suspend(dapm, widget);
+		snprintf(widget, sizeof(widget), "%s %s", component->name_prefix, "AMP PWR Enable");
+		snd_soc_dapm_ignore_suspend(dapm, widget);
+		snprintf(widget, sizeof(widget), "%s %s", component->name_prefix, "NGATE_CH1");
+		snd_soc_dapm_ignore_suspend(dapm, widget);
+		snprintf(widget, sizeof(widget), "%s %s", component->name_prefix, "NGATE_CH2");
+		snd_soc_dapm_ignore_suspend(dapm, widget);
+		snprintf(widget, sizeof(widget), "%s %s", component->name_prefix, "BBPE Enable");
+		snd_soc_dapm_ignore_suspend(dapm, widget);
+		snprintf(widget, sizeof(widget), "%s %s", component->name_prefix, "NFR Enable");
+		snd_soc_dapm_ignore_suspend(dapm, widget);
+		snprintf(widget, sizeof(widget), "%s %s", component->name_prefix, "NGATE Enable");
+		snd_soc_dapm_ignore_suspend(dapm, widget);
+		snprintf(widget, sizeof(widget), "%s %s", component->name_prefix, "Exit");
+		snd_soc_dapm_ignore_suspend(dapm, widget);
+		snprintf(widget, sizeof(widget), "%s %s", component->name_prefix, "Entry");
+		snd_soc_dapm_ignore_suspend(dapm, widget);
+		snprintf(widget, sizeof(widget), "%s %s", component->name_prefix, "SPK");
+		snd_soc_dapm_ignore_suspend(dapm, widget);
+		snprintf(widget, sizeof(widget), "%s %s", component->name_prefix, "RCV");
+		snd_soc_dapm_ignore_suspend(dapm, widget);
+		snprintf(widget, sizeof(widget), "%s %s", component->name_prefix, "AP");
+		snd_soc_dapm_ignore_suspend(dapm, widget);
+	} else {
+		snd_soc_dapm_ignore_suspend(dapm, "Capture");
+		snd_soc_dapm_ignore_suspend(dapm, "Playback");
+		snd_soc_dapm_ignore_suspend(dapm, "DSP1 Slave");
+		snd_soc_dapm_ignore_suspend(dapm, "DSP1 Master");
+		snd_soc_dapm_ignore_suspend(dapm, "GLOBAL_EN");
+		snd_soc_dapm_ignore_suspend(dapm, "ASPTX Ref");
+		snd_soc_dapm_ignore_suspend(dapm, "VMON");
+		snd_soc_dapm_ignore_suspend(dapm, "IMON");
+		snd_soc_dapm_ignore_suspend(dapm, "BATTMON");
+		snd_soc_dapm_ignore_suspend(dapm, "BSTMON");
+		snd_soc_dapm_ignore_suspend(dapm, "RCV_EN");
+		snd_soc_dapm_ignore_suspend(dapm, "ASP");
+		snd_soc_dapm_ignore_suspend(dapm, "ASP_RX1");
+		snd_soc_dapm_ignore_suspend(dapm, "ASP_RX2");
+		snd_soc_dapm_ignore_suspend(dapm, "ASP_TX1");
+		snd_soc_dapm_ignore_suspend(dapm, "ASP_TX2");
+		snd_soc_dapm_ignore_suspend(dapm, "ASP_TX3");
+		snd_soc_dapm_ignore_suspend(dapm, "ASP_TX4");
+		snd_soc_dapm_ignore_suspend(dapm, "ASP_TX1 Source");
+		snd_soc_dapm_ignore_suspend(dapm, "ASP_TX2 Source");
+		snd_soc_dapm_ignore_suspend(dapm, "ASP_TX3 Source");
+		snd_soc_dapm_ignore_suspend(dapm, "ASP_TX4 Source");
+		snd_soc_dapm_ignore_suspend(dapm, "AMP Enable");
+		snd_soc_dapm_ignore_suspend(dapm, "AMP PWR Enable");
+		snd_soc_dapm_ignore_suspend(dapm, "NGATE_CH1");
+		snd_soc_dapm_ignore_suspend(dapm, "NGATE_CH2");
+		snd_soc_dapm_ignore_suspend(dapm, "BBPE Enable");
+		snd_soc_dapm_ignore_suspend(dapm, "NFR Enable");
+		snd_soc_dapm_ignore_suspend(dapm, "NGATE Enable");
+		snd_soc_dapm_ignore_suspend(dapm, "Exit");
+		snd_soc_dapm_ignore_suspend(dapm, "Entry");
+		snd_soc_dapm_ignore_suspend(dapm, "SPK");
+		snd_soc_dapm_ignore_suspend(dapm, "RCV");
+		snd_soc_dapm_ignore_suspend(dapm, "AP");
+	}
 
 	snd_soc_dapm_sync(dapm);
 
@@ -2031,14 +2139,18 @@ static irqreturn_t cs35l45_irq(int irq, void *data)
 		irq_detect |= (status[i] & (~masks[i]));
 	}
 
-	if (!irq_detect)
+	if (!irq_detect) {
+		dev_err(cs35l45->dev, "%s: INT line is not triggered by unmasked source.\n", __func__);
 		return IRQ_NONE;
+	}
 
+	irq_detect = false;
 	for (i = 0; i < ARRAY_SIZE(cs35l45_irq_mons); i++) {
 		regmap_read(cs35l45->regmap, cs35l45_irq_mons[i].reg, &val);
 		if (!(val & cs35l45_irq_mons[i].bitmask))
 			continue;
 
+		irq_detect = true;
 		regmap_write(cs35l45->regmap, cs35l45_irq_mons[i].reg,
 			     cs35l45_irq_mons[i].bitmask);
 
@@ -2052,6 +2164,25 @@ static irqreturn_t cs35l45_irq(int irq, void *data)
 				dev_err(cs35l45->dev,
 					"IRQ (%s) callback failure (%d)\n",
 					cs35l45_irq_mons[i].description, ret);
+		}
+	}
+	
+	if (!irq_detect) {
+		dev_err(cs35l45->dev, "%s: Spurious interrupt is detected.\n", __func__);
+		for (i = 0; i < ARRAY_SIZE(irq_regs); i++) {
+			dev_err(cs35l45->dev, "%s: status = 0x%08x, masks = 0x%08x, quirks = 0x%08x.\n", __func__, status[i], masks[i], (status[i] & (~masks[i])));
+		}
+	}
+	
+	// FIXME:
+	// You can try to modify either status or mask register here as you will
+	for (i = 0; i < ARRAY_SIZE(irq_regs); i++) {
+		regmap_read(cs35l45->regmap, irq_regs[i], &status[i]);
+		regmap_read(cs35l45->regmap, irq_masks[i], &masks[i]);
+		val = (status[i] & (~masks[i]));
+		if (val) {
+			dev_err(cs35l45->dev, "%s: Force to clear irq_reg = 0x%08x, val = 0x%08x.\n", __func__, irq_regs[i], val);
+			regmap_write(cs35l45->regmap, irq_regs[i], val);
 		}
 	}
 
@@ -2084,19 +2215,75 @@ static int cs35l45_register_irq_monitors(struct cs35l45_private *cs35l45)
 	return 0;
 }
 
-static int cs35l45_apply_of_data(struct cs35l45_private *cs35l45)
+static int cs35l45_gpio_configuration(struct cs35l45_private *cs35l45)
 {
 	struct cs35l45_platform_data *pdata = &cs35l45->pdata;
 	struct gpio_ctrl *gpios[] = {&pdata->gpio_ctrl1, &pdata->gpio_ctrl2,
 				     &pdata->gpio_ctrl3};
-	const struct of_entry *entry;
 	unsigned int gpio_regs[] = {CS35L45_GPIO1_CTRL1, CS35L45_GPIO2_CTRL1,
 				    CS35L45_GPIO3_CTRL1};
 	unsigned int pad_regs[] = {CS35L45_SYNC_GPIO1,
 				   CS35L45_INTB_GPIO2_MCLK_REF, CS35L45_GPIO3};
 	unsigned int val;
+	int i;
+	
+	for (i = 0; i < ARRAY_SIZE(gpios); i++) {
+		if (!gpios[i]->is_present)
+			continue;
+	
+		if (gpios[i]->dir & CS35L45_VALID_PDATA) {
+			val = gpios[i]->dir & (~CS35L45_VALID_PDATA);
+			regmap_update_bits(cs35l45->regmap, gpio_regs[i],
+					   CS35L45_GPIO_DIR_MASK,
+					   val << CS35L45_GPIO_DIR_SHIFT);
+		}
+	
+		if (gpios[i]->lvl & CS35L45_VALID_PDATA) {
+			val = gpios[i]->lvl & (~CS35L45_VALID_PDATA);
+			regmap_update_bits(cs35l45->regmap, gpio_regs[i],
+					   CS35L45_GPIO_LVL_MASK,
+					   val << CS35L45_GPIO_LVL_SHIFT);
+		}
+	
+		if (gpios[i]->op_cfg & CS35L45_VALID_PDATA) {
+			val = gpios[i]->op_cfg & (~CS35L45_VALID_PDATA);
+			regmap_update_bits(cs35l45->regmap, gpio_regs[i],
+					   CS35L45_GPIO_OP_CFG_MASK,
+					   val << CS35L45_GPIO_OP_CFG_SHIFT);
+		}
+	
+		if (gpios[i]->pol & CS35L45_VALID_PDATA) {
+			val = gpios[i]->pol & (~CS35L45_VALID_PDATA);
+			regmap_update_bits(cs35l45->regmap, gpio_regs[i],
+					   CS35L45_GPIO_POL_MASK,
+					   val << CS35L45_GPIO_POL_SHIFT);
+		}
+	
+		if (gpios[i]->ctrl & CS35L45_VALID_PDATA) {
+			val = gpios[i]->ctrl & (~CS35L45_VALID_PDATA);
+			regmap_update_bits(cs35l45->regmap, pad_regs[i],
+					   CS35L45_GPIO_CTRL_MASK,
+					   val << CS35L45_GPIO_CTRL_SHIFT);
+		}
+	
+		if (gpios[i]->invert & CS35L45_VALID_PDATA) {
+			val = gpios[i]->invert & (~CS35L45_VALID_PDATA);
+			regmap_update_bits(cs35l45->regmap, pad_regs[i],
+					   CS35L45_GPIO_INVERT_MASK,
+					   val << CS35L45_GPIO_INVERT_SHIFT);
+		}
+	}
+	
+	return 0;
+}
+	
+static int cs35l45_apply_of_data(struct cs35l45_private *cs35l45)
+{
+	struct cs35l45_platform_data *pdata = &cs35l45->pdata;
+	const struct of_entry *entry;
+	unsigned int val;
 	u32 *ptr;
-	int i, j;
+	int i, j, ret;
 
 	if (!pdata)
 		return 0;
@@ -2239,51 +2426,11 @@ classh_cfg:
 			   CS35L45_CH_OVB_LATCH_MASK, 0);
 
 gpio_cfg:
-	for (i = 0; i < ARRAY_SIZE(gpios); i++) {
-		if (!gpios[i]->is_present)
-			continue;
-
-		if (gpios[i]->dir & CS35L45_VALID_PDATA) {
-			val = gpios[i]->dir & (~CS35L45_VALID_PDATA);
-			regmap_update_bits(cs35l45->regmap, gpio_regs[i],
-					   CS35L45_GPIO_DIR_MASK,
-					   val << CS35L45_GPIO_DIR_SHIFT);
-		}
-
-		if (gpios[i]->lvl & CS35L45_VALID_PDATA) {
-			val = gpios[i]->lvl & (~CS35L45_VALID_PDATA);
-			regmap_update_bits(cs35l45->regmap, gpio_regs[i],
-					   CS35L45_GPIO_LVL_MASK,
-					   val << CS35L45_GPIO_LVL_SHIFT);
-		}
-
-		if (gpios[i]->op_cfg & CS35L45_VALID_PDATA) {
-			val = gpios[i]->op_cfg & (~CS35L45_VALID_PDATA);
-			regmap_update_bits(cs35l45->regmap, gpio_regs[i],
-					   CS35L45_GPIO_OP_CFG_MASK,
-					   val << CS35L45_GPIO_OP_CFG_SHIFT);
-		}
-
-		if (gpios[i]->pol & CS35L45_VALID_PDATA) {
-			val = gpios[i]->pol & (~CS35L45_VALID_PDATA);
-			regmap_update_bits(cs35l45->regmap, gpio_regs[i],
-					   CS35L45_GPIO_POL_MASK,
-					   val << CS35L45_GPIO_POL_SHIFT);
-		}
-
-		if (gpios[i]->ctrl & CS35L45_VALID_PDATA) {
-			val = gpios[i]->ctrl & (~CS35L45_VALID_PDATA);
-			regmap_update_bits(cs35l45->regmap, pad_regs[i],
-					   CS35L45_GPIO_CTRL_MASK,
-					   val << CS35L45_GPIO_CTRL_SHIFT);
-		}
-
-		if (gpios[i]->invert & CS35L45_VALID_PDATA) {
-			val = gpios[i]->invert & (~CS35L45_VALID_PDATA);
-			regmap_update_bits(cs35l45->regmap, pad_regs[i],
-					   CS35L45_GPIO_INVERT_MASK,
-					   val << CS35L45_GPIO_INVERT_SHIFT);
-		}
+	ret = cs35l45_gpio_configuration(cs35l45);
+	if (ret < 0) {
+		dev_err(cs35l45->dev, "Failed to apply GPIO config (%d)\n",
+			ret);
+		return ret;
 	}
 
 	return 0;
