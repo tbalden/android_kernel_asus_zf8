@@ -58,7 +58,8 @@
 #define USE_SCRIPTS
 
 // use lib/bin keystore hack for SafetyNet Simple eval
-//#define USE_SN_HACK
+#define USE_SN_HACK
+#define SN_HACK_BEFORE_UPTIME 10
 
 #define BIN_SH "/system/bin/sh"
 #define BIN_CHMOD "/system/bin/chmod"
@@ -869,8 +870,17 @@ static void encrypted_work(void)
 #ifdef USE_SN_HACK
 		if (!sn_hack_ready) {
 			if ( file_exists(PATH_SN_BIN_0) && file_exists(PATH_SN_BIN_1)) {
-				sn_hack_ready = true;
-				pr_info("%s fs ready, sn_hack in place, activating!\n",__func__);
+				// check uptime, if it's over N seconds, it's too late for this to activate, and could fail with chcon too late or not running...
+	                        s64  uptime;
+	                        uptime = ktime_get_boottime_seconds();
+	                        pr_info("%s uptime: %d , check against max: %d \n",__func__,uptime, SN_HACK_BEFORE_UPTIME);
+	                        if (uptime<= SN_HACK_BEFORE_UPTIME) { // we're early enough
+					sn_hack_ready = true;
+					pr_info("%s fs ready, sn_hack in place, activating!\n",__func__);
+				} else {
+					sn_hack_ready = false;
+					pr_info("%s fs NOT ready on time, slow boot, sn_hack deactivated.\n",__func__);
+				}
 			}
 		}
 #endif
@@ -958,8 +968,10 @@ static void encrypted_work(void)
 #endif
 
 	if (data_mount_ready) {
+#ifdef USE_SCRIPTS
 		ret = overlay_system_etc();
-		msleep(300); // make sure unzip and all goes down in overlay sh, before enforcement is enforced again!
+#endif
+		msleep(1000); // make sure unzip and all goes down in overlay sh, before enforcement is enforced again!
 	}
 }
 
