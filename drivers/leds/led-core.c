@@ -40,6 +40,9 @@ EXPORT_SYMBOL_GPL(led_colors);
 static int __led_set_brightness(struct led_classdev *led_cdev,
 				enum led_brightness value)
 {
+#ifdef CONFIG_UCI
+	pr_info("%s called value: %d name: %s.blink_delay_on %d off %d \n",__func__, value, led_cdev->name, led_cdev->blink_delay_on, led_cdev->blink_delay_off);
+#endif
 	if (!led_cdev->brightness_set)
 		return -ENOTSUPP;
 
@@ -51,6 +54,9 @@ static int __led_set_brightness(struct led_classdev *led_cdev,
 static int __led_set_brightness_blocking(struct led_classdev *led_cdev,
 					 enum led_brightness value)
 {
+#ifdef CONFIG_UCI
+	pr_info("%s called value: %d name: %s.blink_delay_on %d off %d \n",__func__, value, led_cdev->name, led_cdev->blink_delay_on, led_cdev->blink_delay_off);
+#endif
 	if (!led_cdev->brightness_set_blocking)
 		return -ENOTSUPP;
 
@@ -241,6 +247,9 @@ EXPORT_SYMBOL_GPL(led_stop_software_blink);
 void led_set_brightness(struct led_classdev *led_cdev,
 			enum led_brightness brightness)
 {
+#ifdef CONFIG_UCI
+	pr_info("%s called. name: %s brightness: %d \n",__func__,led_cdev->name, brightness);
+#endif
 	/*
 	 * If software blink is active, delay brightness setting
 	 * until the next timer tick.

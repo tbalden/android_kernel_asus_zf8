@@ -23,6 +23,10 @@
 #include <linux/slab.h>
 #include <linux/types.h>
 
+#ifdef CONFIG_UCI
+#include <linux/uci/uci.h>
+#endif
+
 #define REG_SIZE_PER_LPG	0x100
 #define LPG_BASE		"lpg-base"
 #define LUT_BASE		"lut-base"
@@ -446,6 +450,12 @@ static int qpnp_lpg_set_pwm_config(struct qpnp_lpg_channel *lpg)
 	u8 val, mask, shift;
 	int pwm_size_idx, pwm_clk_idx, prediv_idx, clk_exp_idx;
 
+#if 1
+	if (lpg->chip->dev->of_node->full_name!=NULL) {
+		dev_err(lpg->chip->dev,"%s [cleanslate] lpg set pwm config, full: %s\n",__func__,lpg->chip->dev->of_node->full_name);
+	}
+#endif
+
 	pwm_size_idx = __find_index_in_array(lpg->pwm_config.pwm_size,
 			pwm_size, ARRAY_SIZE(pwm_size));
 	pwm_clk_idx = __find_index_in_array(lpg->pwm_config.pwm_clk,
@@ -624,6 +634,47 @@ static int qpnp_lpg_set_sdam_ramp_config(struct qpnp_lpg_channel *lpg)
 
 	return rc;
 }
+#ifdef CONFIG_UCI
+static u32 uci_lut_patterns[5][20] = {
+    { 20,40,50, 70,100, 70,50,40,20,10,		0,0,0,0,0,0,0,0,0,0}, // normal
+    { 12,23,36, 50, 64, 80,90,95,100,95,	85,74,64,50,40,33,22,10,0,0}, // oneplus5
+    {100,10,100,10,100, 0, 0, 0, 0, 0,		50,10,50,10,50,0,0,0,0,0}, // triple
+    { 10, 0, 20, 0, 60, 0, 0, 0, 0, 0,		10,0,38,0,100,0,0,0,0,0}, // triple up
+    {100, 0, 28, 0, 10, 0, 0, 0, 0, 0,		60,0,20,0,10,0,0,0,0,0}}; // triple down
+
+static bool bln_rgb_pulse = false;
+static int bln_rgb_pulse_pattern = 0;
+static int bln_rgb_light_level = 0;
+
+struct qpnp_lpg_channel *g_lpg = NULL;
+
+static int qpnp_lpg_set_lut_pattern(struct qpnp_lpg_channel *lpg,
+		unsigned int *pattern, unsigned int length);
+
+static void uci_user_listener(void) {
+	int new_bln_rgb_pulse_pattern = uci_get_user_property_int_mm("bln_rgb_pulse_pattern", 0, 0, 4);
+	bool new_bln_rgb_pulse = !!uci_get_user_property_int_mm("bln_rgb_pulse", 0, 0, 1);
+	int new_bln_rgb_light_level = uci_get_user_property_int_mm("bln_rgb_light_level", 0, 0, 20);
+
+	if (new_bln_rgb_pulse_pattern!=bln_rgb_pulse_pattern || new_bln_rgb_pulse!=bln_rgb_pulse || new_bln_rgb_light_level!=bln_rgb_light_level) {
+
+		bln_rgb_pulse_pattern = new_bln_rgb_pulse_pattern;
+		bln_rgb_pulse = new_bln_rgb_pulse;
+		bln_rgb_light_level = new_bln_rgb_light_level;
+
+		if (g_lpg!=NULL) qpnp_lpg_set_lut_pattern(g_lpg,NULL,20);
+	}
+}
+
+static bool fully_charged_pattern = false;
+
+void uci_led_set_fully_charged_pattern(bool on) {
+	fully_charged_pattern = on;
+	if (g_lpg!=NULL) qpnp_lpg_set_lut_pattern(g_lpg,NULL,20);
+}
+EXPORT_SYMBOL(uci_led_set_fully_charged_pattern);
+
+#endif
 
 static int qpnp_lpg_set_lut_pattern(struct qpnp_lpg_channel *lpg,
 		unsigned int *pattern, unsigned int length)
@@ -635,6 +686,53 @@ static int qpnp_lpg_set_lut_pattern(struct qpnp_lpg_channel *lpg,
 
 	if (lpg->chip->use_sdam)
 		return qpnp_lpg_set_sdam_lut_pattern(lpg, pattern, length);
+
+#ifdef CONFIG_UCI
+	if (lpg->chip->dev->of_node->full_name!=NULL) {
+		dev_err(lpg->chip->dev,"%s [cleanslate] lut pattern full: %s\n",__func__,lpg->chip->dev->of_node->full_name);
+	}
+	if (lpg->chip->dev->of_node->full_name!=NULL && strstr(lpg->chip->dev->of_node->full_name,"pwms@e800"))
+	{
+		if (g_lpg==NULL) g_lpg = lpg;
+		if (bln_rgb_pulse && !fully_charged_pattern) {
+			u32 calc_pattern[20] = {20,40,50,100,60,40,20,10,0,0,0,0,0,0,0,0,0,0,0,0};
+			dev_err(lpg->chip->dev, "%s [cleanslate] new pattern length - override - dev: %s full: %s\n",__func__, lpg->chip->dev->of_node->name, lpg->chip->dev->of_node->full_name);
+			{
+				int i=0;
+				for (i=0;i<20;i++) {
+					calc_pattern[i] = (uci_lut_patterns[bln_rgb_pulse_pattern][i])/((bln_rgb_light_level*2)+1);
+					pr_info("%s [cleanslate] pattern %u -- calc[%u] = %u\n",__func__,bln_rgb_pulse_pattern,i,calc_pattern[i]);
+				}
+			}
+			pattern = calc_pattern;
+			length = 20;
+		} else
+		if (fully_charged_pattern) {
+			u32 calc_pattern[20] = {10,40,60,70,80,90,100,70,40,20,0,10,30,80,90,100,70,40,20,10};
+			{
+				int i=0;
+				for (i=0;i<20;i++) {
+					calc_pattern[i] = (calc_pattern[i])/((bln_rgb_light_level*2)+1);
+					pr_info("%s [cleanslate] BLINK pattern %u -- calc[%u] = %u\n",__func__,bln_rgb_pulse_pattern,i,calc_pattern[i]);
+				}
+			}
+			pattern = calc_pattern;
+			length = 20;
+		} else
+		{
+			u32 calc_pattern[20] = {100,100,100,100,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+			{
+				int i=0;
+				for (i=0;i<20;i++) {
+					calc_pattern[i] = (calc_pattern[i])/((bln_rgb_light_level*2)+1);
+					pr_info("%s [cleanslate] BLINK pattern %u -- calc[%u] = %u\n",__func__,bln_rgb_pulse_pattern,i,calc_pattern[i]);
+				}
+			}
+			pattern = calc_pattern;
+			length = 20;
+		}
+	}
+#endif
 
 	if (length > lpg->max_pattern_length) {
 		dev_err(lpg->chip->dev, "new pattern length (%d) larger than predefined (%d)\n",
@@ -689,6 +787,11 @@ static int qpnp_lpg_set_ramp_config(struct qpnp_lpg_channel *lpg)
 	u8 lsb, msb, addr, mask, val;
 	int rc = 0;
 
+#if 1
+	if (lpg->chip->dev->of_node->full_name!=NULL) {
+		dev_err(lpg->chip->dev,"%s [cleanslate] set_ramp, full: %s\n",__func__,lpg->chip->dev->of_node->full_name);
+	}
+#endif
 	if (lpg->chip->use_sdam)
 		return qpnp_lpg_set_sdam_ramp_config(lpg);
 
@@ -851,10 +954,10 @@ static void __qpnp_lpg_calc_pwm_period(u64 period_ns,
 			pwm_config->clk_exp -= pwm_size_step;
 		}
 	}
-	pr_debug("PWM setting for period_ns %llu: pwm_clk = %dHZ, prediv = %d, exponent = %d, pwm_size = %d\n",
+	pr_info("PWM setting for period_ns %llu: pwm_clk = %dHZ, prediv = %d, exponent = %d, pwm_size = %d\n",
 			period_ns, pwm_config->pwm_clk, pwm_config->prediv,
 			pwm_config->clk_exp, pwm_config->pwm_size);
-	pr_debug("Actual period: %lluns\n", pwm_config->best_period_ns);
+	pr_info("Actual period: %lluns\n", pwm_config->best_period_ns);
 }
 
 static void __qpnp_lpg_calc_pwm_duty(u64 period_ns, u64 duty_ns,
@@ -872,6 +975,11 @@ static void __qpnp_lpg_calc_pwm_duty(u64 period_ns, u64 duty_ns,
 	pwm_config->pwm_value = pwm_value;
 }
 
+#if 1
+static int qpnp_lpg_pwm_set_output_type(struct pwm_chip *pwm_chip,
+		struct pwm_device *pwm, enum pwm_output_type output_type);
+#endif
+
 static int qpnp_lpg_config(struct qpnp_lpg_channel *lpg,
 		u64 duty_ns, u64 period_ns)
 {
@@ -882,6 +990,13 @@ static int qpnp_lpg_config(struct qpnp_lpg_channel *lpg,
 						duty_ns, period_ns);
 		return -EINVAL;
 	}
+#if 1
+	if (lpg->chip->dev->of_node->full_name!=NULL && strstr(lpg->chip->dev->of_node->full_name,"pwms@e800")) {
+		dev_err(lpg->chip->dev,"%s [cleanslate] lpg config, full: %s -- period_ns %d current_period_ns %d src_sel %d vs %d \n",__func__,lpg->chip->dev->of_node->full_name,  period_ns, lpg->current_period_ns, lpg->src_sel, LUT_PATTERN );
+		rc = qpnp_lpg_pwm_set_output_type(&lpg->chip->pwm_chip, lpg->chip->pwm_chip.pwms,
+			PWM_OUTPUT_MODULATED);
+	}
+#endif
 
 	if (period_ns != lpg->current_period_ns) {
 		__qpnp_lpg_calc_pwm_period(period_ns, &lpg->pwm_config);
@@ -1189,6 +1304,11 @@ static int qpnp_lpg_pwm_enable(struct pwm_chip *pwm_chip,
 		dev_err(pwm_chip->dev, "lpg not found\n");
 		return -ENODEV;
 	}
+#if 1
+	if (lpg->chip->dev->of_node->full_name!=NULL) {
+		dev_err(lpg->chip->dev,"%s [cleanslate] lpg enable, full: %s\n",__func__,lpg->chip->dev->of_node->full_name);
+	}
+#endif
 
 	/*
 	 * Update PWM_VALUE_SYNC to make sure PWM_VALUE
@@ -1266,9 +1386,22 @@ static int qpnp_lpg_pwm_apply(struct pwm_chip *pwm_chip, struct pwm_device *pwm,
 {
 	int rc;
 
+
 	if (state->output_type != pwm->state.output_type) {
+#ifdef CONFIG_UCI
+		if (state->output_type == PWM_OUTPUT_MODULATED) {
+			pr_info("%s cleanslate pwm apply PWM_OUTPUT_MODULATED\n",__func__);
+#endif
 		rc = qpnp_lpg_pwm_set_output_type(pwm->chip, pwm,
 				state->output_type);
+#ifdef CONFIG_UCI
+		} else {
+			dev_err(pwm_chip->dev, "%s cleanslate overriding pwm output modulated\n",
+							__func__);
+		rc = qpnp_lpg_pwm_set_output_type(pwm->chip, pwm,
+				PWM_OUTPUT_MODULATED);
+		}
+#endif
 		if (rc < 0)
 			return rc;
 
@@ -1607,7 +1740,12 @@ static int qpnp_lpg_parse_dt(struct qpnp_lpg_chip *chip)
 		}
 	}
 
+#if 0
+	if (of_find_property(chip->dev->of_node, "nvmem", NULL) && true==false) {
+#endif
+#if 1
 	if (of_find_property(chip->dev->of_node, "nvmem", NULL)) {
+#endif
 		chip->lut = devm_kmalloc(chip->dev, sizeof(*chip->lut),
 				GFP_KERNEL);
 		if (!chip->lut)
@@ -1737,6 +1875,9 @@ static int qpnp_lpg_probe(struct platform_device *pdev)
 		dev_err(chip->dev, "Add pwmchip failed, rc=%d\n", rc);
 		goto err_out;
 	}
+#ifdef CONFIG_UCI
+        uci_add_user_listener(uci_user_listener);
+#endif
 
 	return 0;
 err_out:

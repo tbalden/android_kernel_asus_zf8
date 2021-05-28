@@ -19,6 +19,10 @@
 #include <linux/regmap.h>
 #include <linux/types.h>
 
+#ifdef CONFIG_UCI
+#include <linux/uci/uci.h>
+#endif
+
 #define TRILED_REG_TYPE			0x04
 #define TRILED_REG_SUBTYPE		0x05
 #define TRILED_REG_EN_CTL		0x46
@@ -214,6 +218,10 @@ static int qpnp_tri_led_set(struct qpnp_led_dev *led)
 	enum led_brightness brightness = led->led_setting.brightness;
 	int rc = 0;
 
+#ifdef CONFIG_UCI
+	pr_info("%s led: %s val: %d -- blocked? %d \n",__func__,led->label,brightness);
+#endif
+
 	if (led->led_setting.blink) {
 		on_ms = led->led_setting.on_ms;
 		off_ms = led->led_setting.off_ms;
@@ -265,6 +273,22 @@ static int qpnp_tri_led_set(struct qpnp_led_dev *led)
 
 	return rc;
 }
+#ifdef CONFIG_UCI
+static bool block_for_charge_led = false;
+static bool block_for_charge_led_crossed_from_userspace = false;
+static int bln_rgb_light_level = 0;
+
+extern void uci_led_set_fully_charged_pattern(bool on);
+
+struct qpnp_led_dev *g_red;
+struct qpnp_led_dev *g_green;
+
+unsigned long last_red_off_time = 0;
+unsigned long last_green_off_time = 0;
+
+void ntf_led_set_brightness(struct qpnp_led_dev *led, int brightness, bool blink);
+
+#endif
 
 static int qpnp_tri_led_set_brightness(struct led_classdev *led_cdev,
 		enum led_brightness brightness)
@@ -272,6 +296,30 @@ static int qpnp_tri_led_set_brightness(struct led_classdev *led_cdev,
 	struct qpnp_led_dev *led =
 		container_of(led_cdev, struct qpnp_led_dev, cdev);
 	int rc = 0;
+
+#ifdef CONFIG_UCI
+	pr_info("%s led: %s val: %d -- blocked? %d \n",__func__,led->label,brightness, block_for_charge_led);
+
+	if (block_for_charge_led && brightness == 0) { // checks for BRI = 0...
+		if (led==g_red) last_red_off_time = jiffies;
+		if (led==g_green) last_green_off_time = jiffies;
+		{
+			unsigned int diff = last_red_off_time>last_green_off_time ? last_red_off_time - last_green_off_time : last_green_off_time - last_red_off_time;
+			pr_info("%s red/green led bri OFF diff: %u val: %d -- blocked? %d \n",__func__,diff,led->label,brightness, block_for_charge_led);
+			if (diff < 30) { // if off times very close to each other (while being blocked by UCI charge LED state), here we should not block OFF and also let this SET BRIGHTNESS happen
+				if (led==g_green) ntf_led_set_brightness(g_red,0,false);
+				if (led==g_red) ntf_led_set_brightness(g_green,0,false);
+			} else {
+				return rc;
+			}
+		}
+	}
+	// block for charging, when brightness is >0, otherwise we might block USB disconnect LED off settings from userspace.
+	if (brightness>0 && block_for_charge_led) return rc;
+
+	// signal that led was set without blocking...
+	block_for_charge_led_crossed_from_userspace = true;
+#endif
 
 	mutex_lock(&led->lock);
 	if (brightness > LED_FULL)
@@ -283,7 +331,11 @@ static int qpnp_tri_led_set_brightness(struct led_classdev *led_cdev,
 		return 0;
 	}
 
+#ifdef CONFIG_UCI
+	led->led_setting.brightness = brightness / ((bln_rgb_light_level * 2)+1);
+#else
 	led->led_setting.brightness = brightness;
+#endif
 	if (!!brightness)
 		led->led_setting.off_ms = 0;
 	else
@@ -339,6 +391,9 @@ static int qpnp_tri_led_set_blink(struct led_classdev *led_cdev,
 	}
 
 	rc = qpnp_tri_led_set(led);
+#ifdef CONFIG_UCI
+	pr_info("%s led: %s val: %d %d\n",__func__,led->label,on_ms,off_ms);
+#endif
 	if (rc)
 		dev_err(led->chip->dev, "Set led failed for %s, rc=%d\n",
 				led->label, rc);
@@ -353,7 +408,9 @@ static ssize_t breath_show(struct device *dev, struct device_attribute *attr,
 	struct led_classdev *led_cdev = dev_get_drvdata(dev);
 	struct qpnp_led_dev *led =
 		container_of(led_cdev, struct qpnp_led_dev, cdev);
-
+#ifdef CONFIG_UCI
+	pr_info("%s called\n",__func__);
+#endif
 	return scnprintf(buf, PAGE_SIZE, "%d\n", led->led_setting.breath);
 }
 
@@ -366,6 +423,9 @@ static ssize_t breath_store(struct device *dev, struct device_attribute *attr,
 	struct qpnp_led_dev *led =
 		container_of(led_cdev, struct qpnp_led_dev, cdev);
 
+#ifdef CONFIG_UCI
+	pr_info("%s called\n",__func__);
+#endif
 	rc = kstrtobool(buf, &breath);
 	if (rc < 0)
 		return rc;
@@ -469,6 +529,102 @@ static int qpnp_tri_led_hw_init(struct qpnp_tri_led_chip *chip)
 	return 0;
 }
 
+#ifdef CONFIG_UCI
+
+void ntf_led_set_brightness(struct qpnp_led_dev *led, int brightness, bool blink) {
+    if (led==NULL) return;
+    if (!blink) {
+	int rc = 0;
+
+	if (mutex_trylock(&led->lock)) {
+	if (brightness > LED_FULL)
+		brightness = LED_FULL;
+
+	if (brightness == led->led_setting.brightness &&
+			!led->blinking && !led->breathing) {
+		mutex_unlock(&led->lock);
+		return;
+	}
+
+	led->led_setting.brightness = brightness / ((bln_rgb_light_level * 2)+1);
+	if (!!brightness)
+		led->led_setting.off_ms = 0;
+	else
+		led->led_setting.on_ms = 0;
+	led->led_setting.blink = false;
+	led->led_setting.breath = false;
+
+	rc = qpnp_tri_led_set(led);
+	if (rc)
+		dev_err(led->chip->dev, "Set led failed for %s, rc=%d\n",
+				led->label, rc);
+
+	mutex_unlock(&led->lock);
+	}
+    } else {
+	unsigned long on_ms = 1200;
+	unsigned long off_ms = 300;
+
+	int rc = 0;
+
+	if (mutex_trylock(&led->lock)) {
+	if (led->blinking && on_ms == led->led_setting.on_ms &&
+			off_ms == led->led_setting.off_ms) {
+		dev_dbg(led->chip->dev, "Ignore, on/off setting is not changed: on %lums, off %lums\n",
+						on_ms, off_ms);
+		mutex_unlock(&led->lock);
+		return;
+	}
+
+	// on blink, use breath instead
+	led->led_setting.blink = false;
+	led->led_setting.breath = true;
+	led->led_setting.brightness = brightness;//led->cdev.brightness;
+
+	rc = qpnp_tri_led_set(led);
+	if (rc)
+		dev_err(led->chip->dev, "Set led failed for %s, rc=%d\n",
+				led->label, rc);
+
+	mutex_unlock(&led->lock);
+	}
+    }
+
+}
+
+void ntf_led_front_set_charge_colors(int r, int g, int b, bool warp, bool blink) {
+	if (g_green!=NULL && g_red!=NULL) {
+		block_for_charge_led = true;
+		block_for_charge_led_crossed_from_userspace = false;
+		if (warp && !blink) {
+			uci_led_set_fully_charged_pattern(true);
+			ntf_led_set_brightness(g_green,g,false);
+			ntf_led_set_brightness(g_red,r,true);
+		} else {
+			uci_led_set_fully_charged_pattern(false);
+			ntf_led_set_brightness(g_green,g,blink);
+			ntf_led_set_brightness(g_red,r,false);
+		}
+	}
+}
+EXPORT_SYMBOL(ntf_led_front_set_charge_colors);
+
+void ntf_led_front_release_charge(void) {
+	if (g_green!=NULL && g_red!=NULL) {
+		uci_led_set_fully_charged_pattern(false);
+		if (!block_for_charge_led_crossed_from_userspace) { 
+			// userspace framework didn't set leds to Off, after charge interrupted
+			// let's do it now...
+			pr_info("%s setting led after disconnect, as userspace framework didn't do it...\n",__func__);
+			ntf_led_set_brightness(g_red,0,false);
+			ntf_led_set_brightness(g_green,0,false);
+		}
+	}
+	block_for_charge_led = false;
+}
+EXPORT_SYMBOL(ntf_led_front_release_charge);
+#endif
+
 static int qpnp_tri_led_parse_dt(struct qpnp_tri_led_chip *chip)
 {
 	struct device_node *node = chip->dev->of_node, *child_node;
@@ -554,10 +710,24 @@ static int qpnp_tri_led_parse_dt(struct qpnp_tri_led_chip *chip)
 
 		led->default_trigger = of_get_property(child_node,
 				"linux,default-trigger", NULL);
+#ifdef CONFIG_UCI
+		if (!strcmp(led->label,"green")) {
+			g_green = led;
+		}
+		if (!strcmp(led->label,"red")) {
+			g_red = led;
+		}
+#endif
 	}
 
 	return rc;
 }
+
+#ifdef CONFIG_UCI
+static void uci_user_listener(void) {
+	bln_rgb_light_level = uci_get_user_property_int_mm("bln_rgb_light_level", 0, 0, 20);
+}
+#endif
 
 static int qpnp_tri_led_probe(struct platform_device *pdev)
 {
@@ -600,6 +770,9 @@ static int qpnp_tri_led_probe(struct platform_device *pdev)
 
 	dev_dbg(chip->dev, "Tri-led module with subtype 0x%x is detected\n",
 					chip->subtype);
+#ifdef CONFIG_UCI
+        uci_add_user_listener(uci_user_listener);
+#endif
 	return 0;
 destroy:
 	mutex_destroy(&chip->bus_lock);
