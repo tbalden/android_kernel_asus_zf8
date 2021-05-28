@@ -1110,6 +1110,10 @@ static int light_get_accuracy_gain(void)
 	return gainvalue;
 }
 
+#ifdef CONFIG_UCI
+extern void uci_report_lux(int lux, int last_lux);
+#endif
+
 static void light_polling_lux(struct work_struct *work)
 {
 	int adc = 0;
@@ -1146,6 +1150,9 @@ mutex_lock(&g_alsps_lock);
 			if(ALS_check_event_rest_time(lux)==1){
 				psensor_onoff_recovery(true);
 				if(g_als_last_lux != lux){
+#ifdef CONFIG_UCI
+//					uci_report_lux(lux, g_als_last_lux);
+#endif
 					if(lux < 100 && (log_count >= (limit_count/2))){
 						log("[Polling2] Light Sensor Report lux : %d (adc = %d), last_lux=%d, count=%d, poll_t=%u\n"
 							, lux, adc, g_als_last_lux, g_als_data->g_als_retry_count, polling_time);
@@ -1865,6 +1872,12 @@ static int mlight_show_lux(void)
 	
 	return lux;	
 }
+#ifdef CONFIG_UCI
+int uci_get_lux(void) {
+	return mlight_show_lux();
+}
+EXPORT_SYMBOL(uci_get_lux);
+#endif
 
 static psensor_ATTR_HAL mpsensor_ATTR_HAL = {
 	.proximity_show_switch_onoff = mproximity_show_switch_onoff,

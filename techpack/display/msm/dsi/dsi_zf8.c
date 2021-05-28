@@ -9,6 +9,13 @@
 
 #include "dsi_zf8.h"
 
+#ifdef CONFIG_UCI
+#include <linux/uci/uci.h>
+#endif
+#ifdef CONFIG_UCI_NOTIFICATIONS_SCREEN_CALLBACKS
+#include <linux/notification/notification.h>
+#endif
+
 #if defined ASUS_SAKE_PROJECT || defined ASUS_VODKA_PROJECT
 struct dsi_display *g_display;
 char g_reg_buffer[REG_BUF_SIZE];
@@ -1075,6 +1082,121 @@ void dsi_zf8_set_panel_is_on(bool on)
 	}
 }
 
+#ifdef CONFIG_UCI
+static bool uci_listeners_registered = false;
+static int uci_lux_level = -1;
+static int uci_lux_level_detailed = -1;
+static bool is_lp_mode_on = false;
+// user params
+static bool lp_kcal_overlay = false;
+static bool lp_kcal_overlay_always = false;
+static bool lp_kcal_overlay_dynamic = false;
+static int lp_kcal_overlay_level = 50;
+#endif
+
+#ifdef CONFIG_UCI
+
+static int last_aod_lvl = -1;
+static bool running_set_lp2 = false;
+
+static void switch_aod_backlight(int lvl) {
+	int new_aod_lvl = lvl>100;
+	if (last_aod_lvl!=new_aod_lvl)
+	if (g_display!=NULL) {
+		int rc = 0;
+		pr_info("%s [aod_dimmer] switching to HIGH/LOW AOD cmd... lvl %d power_mode %d fod hbm %d stage_id %d \n",__func__, lvl, g_display->panel->power_mode, g_display->panel->allow_panel_fod_hbm,g_lcd_stage_id);
+		bool power_mode_reset = false;
+		if (g_display->panel->power_mode == 2) {
+			
+			rc = dsi_panel_set_lp1(g_display->panel);
+			pr_info("%s [aod_dimmer] ===== LP1 mode - RC: %d... lvl %d power_mode %d fod hbm %d stage_id %d \n",__func__, rc, lvl, g_display->panel->power_mode, g_display->panel->allow_panel_fod_hbm,g_lcd_stage_id);
+			power_mode_reset = true;
+			if (!rc) {
+				g_display->panel->power_mode = 1;
+			}
+		}
+		if (lvl>100) {
+		last_aod_lvl = 1;
+		if (g_display->panel->power_mode >= 1 && !g_display->panel->allow_panel_fod_hbm) {
+#if defined ASUS_SAKE_PROJECT
+			if(1 == g_lcd_stage_id) {
+				rc = dsi_zf8_tx_cmd_set(g_display->panel, DSI_CMD_SET_AOD_HIGH);
+				g_display->panel->has_enter_aod_before = true;
+				pr_info("%s [aod_dimmer] ===== switching to HIGH AOD cmd RC = %d...\n",__func__, rc);
+			}else {
+				rc = dsi_zf8_tx_cmd_set(g_display->panel, DSI_CMD_SET_AOD_ER2_HIGH);
+				g_display->panel->has_enter_aod_before = true;
+				pr_info("%s [aod_dimmer] ===== switching to HIGH AOD cmd 2 RC = %d...\n",__func__, rc);
+			}
+#else
+			rc = dsi_zf8_tx_cmd_set(g_display->panel, DSI_CMD_SET_AOD_HIGH);
+			g_display->panel->has_enter_aod_before = true;
+#endif
+		}
+		} else {
+		last_aod_lvl = 0;
+		if (g_display->panel->power_mode >= 1 && !g_display->panel->allow_panel_fod_hbm) {
+#if defined ASUS_SAKE_PROJECT
+			if(1 == g_lcd_stage_id) {
+					rc = dsi_zf8_tx_cmd_set(g_display->panel, DSI_CMD_SET_AOD_LOW);
+					g_display->panel->has_enter_aod_before = true;
+					pr_info("%s [aod_dimmer] ===== switching to low AOD cmd RC = %d...\n",__func__, rc);
+			}else {
+					rc = dsi_zf8_tx_cmd_set(g_display->panel, DSI_CMD_SET_AOD_ER2_LOW);
+					g_display->panel->has_enter_aod_before = true;
+					pr_info("%s [aod_dimmer] ===== switching to low AOD cmd 2 RC = %d...\n",__func__, rc);
+			}
+#else
+			rc = dsi_zf8_tx_cmd_set(g_display->panel, DSI_CMD_SET_AOD_LOW);
+			g_display->panel->has_enter_aod_before = true;
+#endif
+		}
+		}
+//		if (power_mode_reset) {
+//			running_set_lp2 = true;
+//			rc = dsi_panel_set_lp2(g_display->panel);
+//			running_set_lp2 = false;
+//		}
+	}
+
+}
+
+void uci_report_lux(int lux, int last_lux) {
+	pr_info("%s [aod dimmer] START - dsi zf8 \n",__func__);
+	if (is_lp_mode_on && lp_kcal_overlay_dynamic) {
+		pr_info("%s [aod_dimmer] is_lp_mode_on - sys - new lux level %d\n",__func__,lux);
+		switch_aod_backlight(lux);
+	}
+	pr_info("%s [aod dimmer] --- END\n",__func__);
+}
+EXPORT_SYMBOL(uci_report_lux);
+
+static void uci_sys_listener(void) {
+}
+
+extern int uci_get_lux(void);
+
+static void uci_user_listener(void) {
+    lp_kcal_overlay = !!uci_get_user_property_int_mm("lp_kcal_overlay", 0, 0, 1);
+    lp_kcal_overlay_always = !!uci_get_user_property_int_mm("lp_kcal_overlay_always", 1, 0, 1);
+    lp_kcal_overlay_dynamic = !!uci_get_user_property_int_mm("lp_kcal_overlay_dynamic", 1, 0, 1);
+    lp_kcal_overlay_level = uci_get_user_property_int_mm("lp_kcal_overlay_level", 50, 20, 110);
+}
+
+#define LUX_POLLING_TIME 1000
+static struct workqueue_struct		*ucilux_delay_workqueue;
+
+static void uci_lp_backlight_reg(struct work_struct *work);
+static DECLARE_DELAYED_WORK(uci_lp_backlight_reg_work, uci_lp_backlight_reg);
+
+static void uci_lp_backlight_reg(struct work_struct *work) {
+	int lux = uci_get_lux();
+	uci_report_lux(lux,lux);
+	// reschedule
+	queue_delayed_work(ucilux_delay_workqueue, &uci_lp_backlight_reg_work, msecs_to_jiffies(LUX_POLLING_TIME));
+}
+#endif
+
 // to record & restore user's last backlight
 void dsi_zf8_record_backlight(u32 bl_lvl)
 {
@@ -1082,12 +1204,35 @@ void dsi_zf8_record_backlight(u32 bl_lvl)
 	if (bl_lvl == 0)
 		return;
 
+#ifdef CONFIG_UCI
+	if (!uci_listeners_registered) {
+		uci_add_sys_listener(uci_sys_listener);
+		uci_add_user_listener(uci_user_listener);
+		uci_listeners_registered = true;
+		ucilux_delay_workqueue = alloc_workqueue("uci_lux_delay_wq",
+                                      WQ_HIGHPRI | WQ_MEM_RECLAIM, 1);
+
+	}
+#endif
+
 	g_display->panel->panel_last_backlight = bl_lvl;
 	//#define SDE_MODE_DPMS_LP1	1      sde_drm.h
 	// skip if fod hbm is processing
 	if (g_display->panel->power_mode == 1 && !g_display->panel->allow_panel_fod_hbm) {
 		//DSI_LOG("AOD last_backlight = %d \n", g_display->panel->panel_last_backlight);
 		DSI_LOG("Will enter AOD Mode !\n");
+#ifdef CONFIG_UCI
+                pr_info("%s [aod_dimmer] lp_mode ON \n",__func__);
+                is_lp_mode_on = true;
+		last_aod_lvl = -1;
+                if (lp_kcal_overlay && lp_kcal_overlay_dynamic) {
+    	                uci_lux_level_detailed = -1;
+                        write_uci_out("aod_lp_on");
+			// start a scheduled job
+			queue_delayed_work(ucilux_delay_workqueue, &uci_lp_backlight_reg_work, msecs_to_jiffies(LUX_POLLING_TIME));
+                }
+#endif
+
 		if(g_display->panel->panel_last_backlight > 4) {
 			
 #if defined ASUS_SAKE_PROJECT
@@ -1136,7 +1281,22 @@ void dsi_zf8_record_backlight(u32 bl_lvl)
 			g_display->panel->aod_first_time = true;
 		}
 	}
+#ifdef CONFIG_UCI
+	else {
+		if (g_display->panel->power_mode != 1 && g_display->panel->power_mode != 2) {
+	                pr_info("%s [aod_dimmer] lp_mode off\n",__func__);
+	                is_lp_mode_on = false;
+	                if (lp_kcal_overlay && lp_kcal_overlay_dynamic) {
+	                        uci_lux_level_detailed = -1;
+	                        write_uci_out("aod_lp_off");
+	                }
+			// cancel work
+			cancel_delayed_work(&uci_lp_backlight_reg_work);
+		}
+	}
+#endif
 }
+
 
 void dsi_zf8_restore_backlight(void)
 {
