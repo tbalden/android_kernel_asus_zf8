@@ -32,6 +32,17 @@ bool old_has_fod_spot;
 extern bool has_fod_spot;   //flag indicate the fod spot layer exist
 extern int fod_spot_ui_ready; //flag indicate the fod spot has shown on screen
 
+#ifdef CONFIG_UCI
+static bool listener_added = false;
+
+static bool hbm_tweak = false;
+
+static int hbm_use_value_1 = 0x1c;
+static int hbm_use_value_0 = 0x07;
+
+static int hbm_use_value_2 = 0xE8;
+#endif
+
 // check display or panal valid
 static inline bool display_panel_valid(void)
 {
@@ -173,6 +184,57 @@ static int dsi_zf8_tx_cmd_set(struct dsi_panel *panel,
 			 panel->name, type);
 		goto error;
 	}
+#ifdef CONFIG_UCI
+	if (
+			type == DSI_CMD_SET_HBM_ER2_ON
+		) {
+		pr_info("%s hbm_tweak er2 ... \n",__func__);
+		{
+			static int cmd_detect = 0; // static field to keep it once set...
+			if (count>1) {
+				char *tx_buf = (char *)(++cmds)->msg.tx_buf;
+				for (int i=0; i<=(cmds->msg.tx_len); i++) {
+					pr_info("%s hbm_tweak er2 cmd char (len = %d) - NUM %d => %d\n",__func__, cmds->msg.tx_len, i, tx_buf[i]);
+				}
+				if (cmd_detect==0) {
+					if (tx_buf[1]==0x07 && tx_buf[2]==0x1c) {
+						pr_info("%s hbm_tweak correct command detected from dtsi\n",__func__);
+						cmd_detect = 1;
+					} else {
+						pr_info("%s hbm_tweak incorrect command detected from dtsi\n",__func__);
+						cmd_detect = -1;
+					}
+				}
+				if (cmd_detect == 1) {
+					if (hbm_tweak && cmd_detect == 1) {
+						pr_info("%s hbm_tweak ON - override...\n",__func__);
+						tx_buf[1] = hbm_use_value_0;
+						tx_buf[2] = hbm_use_value_1;
+					} else {
+						pr_info("%s hbm_tweak OFF, reverting...  \n",__func__);
+						tx_buf[1] = 0x07;
+						tx_buf[2] = 0x1c;
+					}
+					pr_info("%s hbm_tweak er2 cmd 1 new chars %d %d\n",__func__, tx_buf[1], tx_buf[2]);
+				}
+
+				cmds = mode->priv_info->cmd_sets[type].cmds;
+				tx_buf = (char *)(cmds)->msg.tx_buf;
+				if (cmd_detect == 1) {
+					if (hbm_tweak && cmd_detect == 1) {
+						tx_buf[1] = hbm_use_value_2;
+					} else {
+						tx_buf[1] = 0xE8;
+					}
+					pr_info("%s hbm_tweak er2 cmd 0 new chars: %d %d\n",__func__, tx_buf[0], tx_buf[1]);
+				}
+			} else {
+				pr_info("%s hbm_tweak one long incorrect command detected from dtsi\n",__func__);
+				cmd_detect = -1;
+			}
+		}
+	}
+#endif
 
 	for (i = 0; i < count; i++) {
 		if (state == DSI_CMD_SET_STATE_LP)
@@ -1022,6 +1084,24 @@ void dsi_zf8_frame_commit_cnt(struct drm_crtc *crtc)
 	}
 }
 
+
+#ifdef CONFIG_UCI
+static void uci_user_listener(void) {
+        bool new_hbm_tweak = !!uci_get_user_property_int_mm("hbm_switch", 0, 0, 1);
+        int new_hbm_use_value_0 = uci_get_user_property_int_mm("hbm_use_value_0", 0x07, 0, 255);
+        int new_hbm_use_value_1 = uci_get_user_property_int_mm("hbm_use_value_1", 0x1c, 0, 255);
+        int new_hbm_use_value_2 = uci_get_user_property_int_mm("hbm_use_value_2", 0xE8, 0, 255);
+	if (hbm_tweak!=new_hbm_tweak || new_hbm_use_value_0!=hbm_use_value_0 || new_hbm_use_value_1!=hbm_use_value_1 || new_hbm_use_value_2!=hbm_use_value_2) {
+		hbm_use_value_0 = new_hbm_use_value_0;
+		hbm_use_value_1 = new_hbm_use_value_1;
+		hbm_use_value_2 = new_hbm_use_value_2;
+		hbm_tweak = new_hbm_tweak;
+		dsi_zf8_set_hbm(g_display->panel,new_hbm_tweak);
+	}
+
+}
+#endif
+
 // to initial asus display parameters
 void dsi_zf8_display_init(struct dsi_display *display)
 {
@@ -1050,6 +1130,12 @@ void dsi_zf8_display_init(struct dsi_display *display)
 	proc_create(LCD_BACKLIGNTNESS, 0666, NULL, &lcd_brightness_ops);
 	proc_create(GLOBAL_HBM_MODE_DELAY, 0666, NULL, &global_hbm_mode_delay_ops);
 	proc_create(HBM_MODE_COUNT, 0666, NULL, &hbm_mode_count_ops);
+#ifdef CONFIG_UCI
+       if (!listener_added) {
+              uci_add_user_listener(uci_user_listener);
+              listener_added = true;
+       }
+#endif
 }
 
 // to parse panel_vendor_id from panel dtsi
