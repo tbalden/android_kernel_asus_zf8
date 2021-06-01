@@ -4133,6 +4133,12 @@ static ssize_t aw8697_mem_play_store(struct device *dev,
 		goto mem_play_store_brk1;
 	}
 	cancel_delayed_work(&aw8697->gain_work);
+#ifdef CONFIG_UCI
+	if (aw8697->gain>MAX_GAIN) {
+		aw8697->gain = MAX_GAIN;
+		aw8697_haptic_set_gain(aw8697, aw8697->gain);
+	}
+#endif
 	aw8697_haptic_set_wav_seq(aw8697, 0, (unsigned char)val);
 	aw8697_haptic_set_wav_seq(aw8697, 1, 0);
 	aw8697_haptic_set_wav_loop(aw8697, 0, 0);
