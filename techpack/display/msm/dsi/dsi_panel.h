@@ -270,6 +270,7 @@ struct dsi_panel {
 	bool aod_state;
 	bool aod_first_time;
 	bool has_enter_aod_before;
+	bool fod_in_doze;
 };
 
 static inline bool dsi_panel_ulps_feature_enabled(struct dsi_panel *panel)
@@ -294,7 +295,11 @@ static inline void dsi_panel_release_panel_lock(struct dsi_panel *panel)
 
 static inline bool dsi_panel_is_type_oled(struct dsi_panel *panel)
 {
+#if defined ASUS_SAKE_PROJECT || defined ASUS_VODKA_PROJECT
+	return false;
+#else
 	return (panel->panel_type == DSI_DISPLAY_PANEL_TYPE_OLED);
+#endif
 }
 
 struct dsi_panel *dsi_panel_get(struct device *parent,
