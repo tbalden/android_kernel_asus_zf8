@@ -264,13 +264,14 @@ struct dsi_panel {
 	int panel_fod_hbm_mode;
 	int allow_panel_fod_hbm;
 	bool allow_fod_hbm_process;
-	bool allow_dimming_smooth;
+	//bool allow_dimming_smooth;
 	bool panel_is_on;
 	u32 panel_last_backlight;
 	bool aod_state;
 	bool aod_first_time;
 	bool has_enter_aod_before;
 	bool fod_in_doze;
+	int panel_bl_count; // count for enable dimming
 };
 
 static inline bool dsi_panel_ulps_feature_enabled(struct dsi_panel *panel)

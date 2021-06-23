@@ -677,6 +677,7 @@ static int dsi_panel_update_backlight(struct dsi_panel *panel,
 #endif
 	dsi_anakin_record_backlight(bl_lvl);
 	dsi_zf8_record_backlight(bl_lvl);
+	dsi_zf8_set_dimming_smooth(panel, bl_lvl);
 
 	// always 0 except project Anakin & Picasso
 	if (panel->allow_panel_fod_hbm == 1)
@@ -686,7 +687,6 @@ static int dsi_panel_update_backlight(struct dsi_panel *panel,
 
 	if (panel->bl_config.bl_inverted_dbv)
 		bl_lvl = (((bl_lvl & 0xff) << 8) | (bl_lvl >> 8));
-
 #if defined(CONFIG_PXLW_IRIS)
 	if (iris_is_mp_panel()) {
 		if (!iris_dc_on_off_pending())

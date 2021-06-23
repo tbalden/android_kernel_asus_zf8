@@ -439,7 +439,7 @@ static int dsi_zf8_set_fod_hbm(struct dsi_panel *panel, bool enable)
 			pr_err("[Display][%s] failed to send DSI_CMD_SET_FOD_HBM_OFF cmd, rc=%d\n",
 				   panel->name, rc);
 
-		panel->allow_dimming_smooth = true;
+		//panel->allow_dimming_smooth = true;
 	}
 
 exit:
@@ -481,29 +481,31 @@ static void display_set_fod_hbm(void)
 }
 
 //send Dimming Smooth command to panel
-static int dsi_zf8_set_dimming_smooth(struct dsi_panel *panel)
+void dsi_zf8_set_dimming_smooth(struct dsi_panel *panel, u32 backlight)
 {
 	int rc = 0;
 
-	if (!panel) {
-		DSI_LOG("invalid params\n");
-		return -EINVAL;
+	// don't allow in fod hbm
+	if (panel->allow_panel_fod_hbm == 1)
+		return;
+
+	if (panel->aod_state ||panel->allow_fod_hbm_process || backlight == 0) {
+		panel->panel_bl_count = 0;
+		return;
 	}
 
-	mutex_lock(&panel->panel_lock);
-	if (!panel->panel_initialized)
-		goto exit;
-
-	rc = dsi_zf8_tx_cmd_set(panel, DSI_CMD_SET_DIMMING_SMOOTH);
-	if (rc)
+	if (panel->panel_bl_count == 1) {
+		DSI_LOG("restore dimming smooth\n");
+		rc = dsi_zf8_tx_cmd_set(panel, DSI_CMD_SET_DIMMING_SMOOTH);
+		if (rc)
 		DSI_LOG("[%s] failed to send DSI_CMD_SET_DIMMING_SMOOTH cmd, rc=%d\n",
 			   panel->name, rc);
+		
+		return;
+	}
+	
+	panel->panel_bl_count++;
 
-	panel->allow_dimming_smooth = false;
-
-exit:
-	mutex_unlock(&panel->panel_lock);
-	return rc;
 }
 
 // panel_reg_rw_ops() - read/write/show panel register
@@ -846,7 +848,7 @@ static struct file_operations global_hbm_mode_ops = {
 #if defined ASUS_VODKA_PROJECT
 int hbm_mode_delay_num = 10000;
 #else
-int hbm_mode_delay_num = 10000;
+int hbm_mode_delay_num = 0;
 #endif
 
 static ssize_t global_hbm_mode_delay_read(struct file *file, char __user *user_buf,
@@ -1001,7 +1003,7 @@ void dsi_zf8_clear_commit_cnt(void)
 
 void dsi_zf8_frame_commit_cnt(struct drm_crtc *crtc)
 {
-	static int fod_off_frame_cnt = 0;
+	//static int fod_off_frame_cnt = 0;
 
 	if (display_commit_cnt > 0 && !strcmp(crtc->name, "crtc-0")) {
 		DSI_LOG("fbc%d\n", display_commit_cnt);
@@ -1009,7 +1011,7 @@ void dsi_zf8_frame_commit_cnt(struct drm_crtc *crtc)
 	}
 
 
-	if (g_display->panel->allow_dimming_smooth && fod_off_frame_cnt <= 2) {
+	/*if (g_display->panel->allow_dimming_smooth && fod_off_frame_cnt <= 2) {
 		fod_off_frame_cnt++;
 
 		if (fod_off_frame_cnt == 2) {
@@ -1017,7 +1019,7 @@ void dsi_zf8_frame_commit_cnt(struct drm_crtc *crtc)
 			dsi_zf8_set_dimming_smooth(g_display->panel);
 			fod_off_frame_cnt = 0;
 		}
-	}
+	}*/
 
 	if(g_display->panel->aod_state && display_commit_cnt < 1 && g_display->panel->aod_first_time) {
 		DSI_LOG("AOD notification case restore bl = %d\n", g_display->panel->panel_last_backlight);
@@ -1037,13 +1039,14 @@ void dsi_zf8_display_init(struct dsi_display *display)
 	g_display->panel->panel_fod_hbm_mode = 0;
 	g_display->panel->allow_panel_fod_hbm = 0;
 	g_display->panel->allow_fod_hbm_process = false;
-	g_display->panel->allow_dimming_smooth = false;
+	//g_display->panel->allow_dimming_smooth = false;
 	g_display->panel->panel_is_on = false;
 	g_display->panel->panel_last_backlight = 0;
 	g_display->panel->aod_state = false;
 	g_display->panel->aod_first_time = false;
 	g_display->panel->has_enter_aod_before = false;
 	g_display->panel->fod_in_doze = false;
+	g_display->panel->panel_bl_count = 0;
 
 	proc_create(PANEL_REGISTER_RW, 0640, NULL, &panel_reg_rw_ops);
 	proc_create(PANEL_VENDOR_ID, 0640, NULL, &panel_vendor_id_ops);
@@ -1079,11 +1082,14 @@ void dsi_zf8_set_panel_is_on(bool on)
 		g_display->panel->panel_fod_hbm_mode = 0;
 		g_display->panel->allow_panel_fod_hbm = 0;
 		g_display->panel->allow_fod_hbm_process = false;
-		g_display->panel->allow_dimming_smooth = false;
+		//g_display->panel->allow_dimming_smooth = false;
 		g_display->panel->fod_in_doze = false;
 		g_display->panel->aod_state = false;
-		
+		g_display->panel->panel_bl_count = 0;
+		has_fod_masker = false;
 		old_has_fod_masker = false;
+		has_fod_spot = false;
+		old_has_fod_spot = false;
 		zf8_drm_notify(ASUS_NOTIFY_SPOT_READY, 0);
 		zf8_drm_notify(ASUS_NOTIFY_GHBM_ON_READY, 0);
 		zf8_drm_notify(ASUS_NOTIFY_GHBM_ON_REQ, 0);
