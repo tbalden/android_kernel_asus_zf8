@@ -495,11 +495,16 @@ void dsi_zf8_set_dimming_smooth(struct dsi_panel *panel, u32 backlight)
 	}
 
 	if (panel->panel_bl_count == 1) {
-		DSI_LOG("restore dimming smooth\n");
-		rc = dsi_zf8_tx_cmd_set(panel, DSI_CMD_SET_DIMMING_SMOOTH);
-		if (rc)
-		DSI_LOG("[%s] failed to send DSI_CMD_SET_DIMMING_SMOOTH cmd, rc=%d\n",
-			   panel->name, rc);
+		
+		if(!panel->dc_fps_change) {
+			DSI_LOG("restore dimming smooth\n");
+			rc = dsi_zf8_tx_cmd_set(panel, DSI_CMD_SET_DIMMING_SMOOTH);
+			if (rc)
+			DSI_LOG("[%s] failed to send DSI_CMD_SET_DIMMING_SMOOTH cmd, rc=%d\n",
+				   panel->name, rc);
+		}else {
+			panel->dc_fps_change = false;
+		}
 		
 		return;
 	}
@@ -772,6 +777,14 @@ static ssize_t lcd_brightness_write(struct file *filp, const char *buff, size_t 
 	DSI_LOG("dc lcd brightess need change backlightnes : %d\n",backlight_lvl);
 	// restrict backlight range 1 - 1023
 	if (g_display->panel->panel_is_on && backlight_lvl > 0 && backlight_lvl < 1024) {
+		if(backlight_lvl < 248) {
+			DSI_LOG("FPS Change restore brightness < 248!\n");
+			g_display->panel->dc_fps_change = true ;
+		}else {
+			DSI_LOG("FPS Change restore brightness >= 248!\n");
+			g_display->panel->dc_fps_change = false;
+		}
+		
 		rc =  dsi_panel_set_backlight(g_display->panel,backlight_lvl);
 		if(rc < 0)
 			DSI_LOG("dsi_panel_update_backlight error! \n");
@@ -1047,7 +1060,9 @@ void dsi_zf8_display_init(struct dsi_display *display)
 	g_display->panel->has_enter_aod_before = false;
 	g_display->panel->fod_in_doze = false;
 	g_display->panel->panel_bl_count = 0;
-
+	g_display->panel->aod_mode = 0;
+	g_display->panel->dc_fps_change = false;
+	
 	proc_create(PANEL_REGISTER_RW, 0640, NULL, &panel_reg_rw_ops);
 	proc_create(PANEL_VENDOR_ID, 0640, NULL, &panel_vendor_id_ops);
 	proc_create(PANEL_FPS, 0660, NULL, &panel_fps_ops);
@@ -1078,6 +1093,7 @@ void dsi_zf8_set_panel_is_on(bool on)
 	g_display->panel->panel_is_on = on;
 
 	if (on == false) {
+		DSI_LOG("dsi_zf8_set_panel_is_on  false !\n ");
 		g_display->panel->panel_hbm_mode = 0;
 		g_display->panel->panel_fod_hbm_mode = 0;
 		g_display->panel->allow_panel_fod_hbm = 0;
@@ -1090,6 +1106,7 @@ void dsi_zf8_set_panel_is_on(bool on)
 		old_has_fod_masker = false;
 		has_fod_spot = false;
 		old_has_fod_spot = false;
+		g_display->panel->dc_fps_change = false;
 		zf8_drm_notify(ASUS_NOTIFY_SPOT_READY, 0);
 		zf8_drm_notify(ASUS_NOTIFY_GHBM_ON_READY, 0);
 		zf8_drm_notify(ASUS_NOTIFY_GHBM_ON_REQ, 0);
@@ -1107,6 +1124,16 @@ void dsi_zf8_record_backlight(u32 bl_lvl)
 	//#define SDE_MODE_DPMS_LP1	1      sde_drm.h
 	// skip if fod hbm is processing
 	if ((g_display->panel->power_mode == 1  || g_display->panel->power_mode == 2)&& !g_display->panel->allow_panel_fod_hbm) {
+		
+		if(g_display->panel->panel_last_backlight == 248) {
+			if(g_display->panel->aod_mode == 1)
+				g_display->panel->panel_last_backlight = 4;
+			else if(g_display->panel->aod_mode == 2)
+				g_display->panel->panel_last_backlight = 64;
+			else 
+				DSI_LOG("Can not run here , This is a Bug!\n");
+		}
+		
 		//DSI_LOG("AOD last_backlight = %d \n", g_display->panel->panel_last_backlight);
 		DSI_LOG("Will enter AOD Mode !\n");
 		if(g_display->panel->panel_last_backlight > 4) {
@@ -1123,6 +1150,8 @@ void dsi_zf8_record_backlight(u32 bl_lvl)
 			rc = dsi_zf8_tx_cmd_set(g_display->panel, DSI_CMD_SET_AOD_HIGH);
 			g_display->panel->has_enter_aod_before = true;
 #endif
+			DSI_LOG("set aod_mode 2 \n");
+			g_display->panel->aod_mode = 2;
 			
 #if 1
 	     } else if (g_display->panel->panel_last_backlight <= 4) { // temp fix for aod issues
@@ -1142,17 +1171,21 @@ void dsi_zf8_record_backlight(u32 bl_lvl)
 			rc = dsi_zf8_tx_cmd_set(g_display->panel, DSI_CMD_SET_AOD_LOW);
 			g_display->panel->has_enter_aod_before = true;
 #endif
+			DSI_LOG("set aod_mode 1 \n");
+			g_display->panel->aod_mode = 1;
 	    }
 		// for non 4 / 64 bl && aod on state, prevent display keep off
 		else if(g_display->panel->aod_state){
 			DSI_LOG("Send DSI_CMD_SET_AOD_OTHER !\n");
 			rc = dsi_zf8_tx_cmd_set(g_display->panel, DSI_CMD_SET_AOD_OTHER);
 			g_display->panel->has_enter_aod_before = false;
+			g_display->panel->aod_mode = 0;
 		}
 		
 		if(rc) {
 			DSI_LOG("unable to set AOD command\n");
 			g_display->panel->has_enter_aod_before = false;
+			g_display->panel->aod_mode = 0;
 		} else {    // if AOD cmd set sucess, set up first_time as true
 			g_display->panel->aod_first_time = true;
 		}
