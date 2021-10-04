@@ -51,7 +51,7 @@
 #define RUN_RESET_PROPS_BEFORE_DECRYPT
 //#define RUN_RESET_PROPS_AFTER_DECRYPT
 //#define USE_LOCK_HIDE
-//#define USE_PIXEL_PROP
+#define USE_PIXEL_PROP
 
 #define USE_PACKED_HOSTS
 // define this if you can use scripts .sh files
@@ -689,7 +689,7 @@ static void run_resetprops(void) {
 	        do {
 #ifdef USE_PIXEL_PROP
 			ret = call_userspace(BIN_RESETPROP,
-				"ro.product.name", "Pixel 5", "resetprop product");
+				"ro.product.model", "ASUS_I006D ", "resetprop product model");
 #else
 			ret = call_userspace(BIN_RESETPROP, "ro.boot.flash.locked", "1", "resetprop verifiedbootstate");
 #endif
