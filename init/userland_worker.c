@@ -689,7 +689,7 @@ static void run_resetprops(void) {
 	        do {
 #ifdef USE_PIXEL_PROP
 			ret = call_userspace(BIN_RESETPROP,
-				"ro.product.model", "ASUS_I006D ", "resetprop product model");
+				"ro.product.model", "ASUS_I006DD", "resetprop product model");
 #else
 			ret = call_userspace(BIN_RESETPROP, "ro.boot.flash.locked", "1", "resetprop verifiedbootstate");
 #endif
