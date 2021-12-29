@@ -50,6 +50,10 @@
 #define PROC_READ_STATUS                        12
 #define PROC_SET_BOOT_MODE                      13
 #define PROC_ENTER_TEST_ENVIRONMENT             14
+#define PROC_WRITE_DATA_DIRECT                  16
+#define PROC_READ_DATA_DIRECT                   17
+#define PROC_CONFIGURE                          18
+#define PROC_CONFIGURE_INTR                     20
 #define PROC_NAME                               "ftxxxx-debug"
 #define PROC_BUF_SIZE                           256
 
@@ -94,7 +98,7 @@ static ssize_t fts_debug_write(
     struct ftxxxx_proc *proc = &ts_data->proc;
 
     if (buflen <= 1) {
-        FTS_ERROR("apk proc wirte count(%d) fail", buflen);
+        FTS_ERROR("apk proc count(%d) fail", buflen);
         return -EINVAL;
     }
 
@@ -143,7 +147,7 @@ static ssize_t fts_debug_write(
 
     case PROC_READ_DATA:
         writelen = buflen - 1;
-        if (writelen >= FTX_MAX_COMMMAND_LENGTH) {
+        if (writelen >= FTS_MAX_COMMMAND_LENGTH) {
             FTS_ERROR("cmd(PROC_READ_DATA) length(%d) fail", writelen);
             goto proc_write_err;
         }
@@ -169,11 +173,13 @@ static ssize_t fts_debug_write(
         break;
 
     case PROC_HW_RESET:
-        snprintf(tmp, PROC_BUF_SIZE, "%s", writebuf + 1);
-        tmp[buflen - 1] = '\0';
-        if (strncmp(tmp, "focal_driver", 12) == 0) {
-            FTS_INFO("APK execute HW Reset");
-            fts_reset_proc(0);
+        if (buflen < PROC_BUF_SIZE) {
+            snprintf(tmp, PROC_BUF_SIZE, "%s", writebuf + 1);
+            tmp[buflen - 1] = '\0';
+            if (strncmp(tmp, "focal_driver", 12) == 0) {
+                FTS_INFO("APK execute HW Reset");
+                fts_reset_proc(0);
+            }
         }
         break;
 
@@ -192,6 +198,14 @@ static ssize_t fts_debug_write(
         } else {
             fts_enter_test_environment(1);
         }
+        break;
+
+
+    case PROC_CONFIGURE_INTR:
+        if (writebuf[1] == 0)
+            fts_irq_disable();
+        else
+            fts_irq_enable();
         break;
 
     default:
@@ -226,7 +240,7 @@ static ssize_t fts_debug_read(
     if (buflen > PROC_BUF_SIZE) {
         readbuf = (u8 *)kzalloc(buflen * sizeof(u8), GFP_KERNEL);
         if (NULL == readbuf) {
-            FTS_ERROR("apk proc wirte buf zalloc fail");
+            FTS_ERROR("apk proc buf zalloc fail");
             return -ENOMEM;
         }
     } else {
@@ -257,6 +271,7 @@ static ssize_t fts_debug_read(
             goto proc_read_err;
         }
         break;
+
 
     case PROC_WRITE_DATA:
         break;
@@ -351,7 +366,7 @@ static int fts_debug_write(
 
     case PROC_READ_DATA:
         writelen = buflen - 1;
-        if (writelen >= FTX_MAX_COMMMAND_LENGTH) {
+        if (writelen >= FTS_MAX_COMMMAND_LENGTH) {
             FTS_ERROR("cmd(PROC_READ_DATA) length(%d) fail", writelen);
             goto proc_write_err;
         }
@@ -377,11 +392,13 @@ static int fts_debug_write(
         break;
 
     case PROC_HW_RESET:
-        snprintf(tmp, PROC_BUF_SIZE, "%s", writebuf + 1);
-        tmp[buflen - 1] = '\0';
-        if (strncmp(tmp, "focal_driver", 12) == 0) {
-            FTS_INFO("APK execute HW Reset");
-            fts_reset_proc(0);
+        if (buflen < PROC_BUF_SIZE) {
+            snprintf(tmp, PROC_BUF_SIZE, "%s", writebuf + 1);
+            tmp[buflen - 1] = '\0';
+            if (strncmp(tmp, "focal_driver", 12) == 0) {
+                FTS_INFO("APK execute HW Reset");
+                fts_reset_proc(0);
+            }
         }
         break;
 
@@ -400,6 +417,14 @@ static int fts_debug_write(
         } else {
             fts_enter_test_environment(1);
         }
+        break;
+
+
+    case PROC_CONFIGURE_INTR:
+        if (writebuf[1] == 0)
+            fts_irq_disable();
+        else
+            fts_irq_enable();
         break;
 
     default:
@@ -434,7 +459,7 @@ static int fts_debug_read(
     if (buflen > PROC_BUF_SIZE) {
         readbuf = (u8 *)kzalloc(buflen * sizeof(u8), GFP_KERNEL);
         if (NULL == readbuf) {
-            FTS_ERROR("apk proc wirte buf zalloc fail");
+            FTS_ERROR("apk proc buf zalloc fail");
             return -ENOMEM;
         }
     } else {
@@ -465,6 +490,7 @@ static int fts_debug_read(
             goto proc_read_err;
         }
         break;
+
 
     case PROC_WRITE_DATA:
         break;
@@ -550,14 +576,7 @@ static ssize_t fts_hw_reset_store(
     struct device *dev,
     struct device_attribute *attr, const char *buf, size_t count)
 {
-    struct input_dev *input_dev = fts_data->input_dev;
-
-    mutex_lock(&input_dev->mutex);
-    if (FTS_SYSFS_ECHO_ON(buf)) {
-        fts_reset_proc(200);
-    } 
-    mutex_unlock(&input_dev->mutex);
-    return count;
+    return -EPERM;
 }
 
 /* fts_irq interface */

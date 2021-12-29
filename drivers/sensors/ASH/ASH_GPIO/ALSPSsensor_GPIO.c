@@ -48,40 +48,30 @@ static struct i2c_client * g_i2c_client = NULL;
 
 static irqreturn_t ALSPSsensor_irq_handler(int irq, void *dev_id);
 
-#ifdef GPIO_INTEL
-#include <asm/intel-mid.h>
-#endif
-
-#ifdef GPIO_QCOM
-#ifndef CONFIG_TMD2755_FLAG
 #include <linux/of_gpio.h>
 #ifdef ALSP_GPIO_NO_PULL
 #define GPIO_LOOKUP_STATE	"alsps_gpio_no_pull"
 #else
 #define GPIO_LOOKUP_STATE	"alsps_gpio_high"
-#endif
+#endif //ALSP_GPIO_NO_PULL
 
 static void set_pinctrl(struct i2c_client *client)
 {
 	int ret;
 	struct pinctrl *key_pinctrl;
 	struct pinctrl_state *set_state;
-	
+
 	key_pinctrl = devm_pinctrl_get(&client->dev);
 	set_state = pinctrl_lookup_state(key_pinctrl, GPIO_LOOKUP_STATE);
 	ret = pinctrl_select_state(key_pinctrl, set_state);
 	if(ret < 0)
 		err("%s: pinctrl_select_state ERROR(%d).\n", __FUNCTION__, ret);
 }
-#endif
-#endif
+
 static int init_irq (void)
 {
 	int ret = 0;
 	int irq = 0;
-#ifdef CONFIG_TMD2755_FLAG
-	unsigned long default_irq_trigger = 0;
-#endif
 
 	/* GPIO to IRQ */
 	irq = gpio_to_irq(ALSPS_SENSOR_GPIO);
@@ -92,34 +82,9 @@ static int init_irq (void)
 		log("gpio_to_irq IRQ %d successed on GPIO:%d\n", irq, ALSPS_SENSOR_GPIO);
 	}
 
-	/*Request IRQ*/	
-	#ifdef GPIO_INTEL
-	ret = request_irq(irq,ALSPSsensor_irq_handler, IRQF_TRIGGER_LOW, ALSPS_INT_NAME, NULL);
-	#endif
-	#ifdef GPIO_QCOM
-#ifdef CONFIG_TMD2755_FLAG
-	default_irq_trigger = irqd_get_trigger_type(irq_get_irq_data(g_i2c_client->irq));
-	ret = request_threaded_irq(irq, NULL, ALSPSsensor_irq_handler,
-				default_irq_trigger | IRQF_SHARED | IRQF_ONESHOT, ALSPS_INT_NAME, NULL);
-	if (ret < 0) {
-		err("%s: request_irq/request_threaded_irq ERROR(%d).\n", __FUNCTION__, ret);
-	}
 	ret = request_threaded_irq(irq, NULL, ALSPSsensor_irq_handler,
 				IRQF_TRIGGER_LOW | IRQF_ONESHOT, ALSPS_INT_NAME, NULL);
-	if (ret < 0) {
-		err("%s: 1request_irq/request_threaded_irq ERROR(%d).\n", __FUNCTION__, ret);
-	}
-	
-	ret = devm_request_threaded_irq(&g_i2c_client->dev, g_i2c_client->irq, NULL, &ALSPSsensor_irq_handler, default_irq_trigger | IRQF_SHARED | IRQF_ONESHOT,
-					dev_name(&g_i2c_client->dev), NULL);
-	if (ret) {
-		err("%s: 2request_irq/request_threaded_irq ERROR(%d).\n", __FUNCTION__, ret);
-	}
-#else
-	ret = request_threaded_irq(irq, NULL, ALSPSsensor_irq_handler,
-				IRQF_TRIGGER_LOW | IRQF_ONESHOT, ALSPS_INT_NAME, NULL);
-#endif
-	#endif
+
 	if (ret < 0) {
 		err("%s: request_irq/request_threaded_irq ERROR(%d).\n", __FUNCTION__, ret);
 		return ret;
@@ -145,16 +110,7 @@ int ALSPSsensor_gpio_register(struct i2c_client *client, ALSPSsensor_GPIO *gpio_
 	g_i2c_client = client;
 
 	mALSPSsensor_GPIO = gpio_ist;
-	
-	/* GPIO */
-	#ifdef GPIO_INTEL
-	log("Intel GPIO \n");
-	ALSPS_SENSOR_GPIO = get_gpio_by_name(ALSPS_INTEL_NAME);
-	#endif
-	
-	#ifdef GPIO_QCOM
-#ifdef CONFIG_TMD2755_FLAG
-#else
+
 	log("Qcom GPIO \n");
 
 #ifdef ALSP_GPIO_NO_PULL
@@ -166,8 +122,7 @@ int ALSPSsensor_gpio_register(struct i2c_client *client, ALSPSsensor_GPIO *gpio_
 	set_pinctrl(client);
 //	ALSPS_SENSOR_GPIO = of_get_named_gpio_flags(client->dev.of_node, ALSPS_QCOM_NAME, 0, NULL);
 	ALSPS_SENSOR_GPIO = of_get_named_gpio(client->dev.of_node, ALSPS_QCOM_NAME, 0);
-	#endif
-		
+
 	log("[GPIO] GPIO =%d(%d)\n", ALSPS_SENSOR_GPIO, gpio_get_value(ALSPS_SENSOR_GPIO));	
 	/* GPIO Request */
 	ret = gpio_request(ALSPS_SENSOR_GPIO, ALSPS_IRQ_NAME);
@@ -185,12 +140,9 @@ int ALSPSsensor_gpio_register(struct i2c_client *client, ALSPSsensor_GPIO *gpio_
 	}
 	/*IRQ*/
 	irq = init_irq();
-#endif
 	return irq;
-
 }
 EXPORT_SYMBOL(ALSPSsensor_gpio_register);
-
 
 int ALSPSsensor_gpio_unregister(int irq)
 {

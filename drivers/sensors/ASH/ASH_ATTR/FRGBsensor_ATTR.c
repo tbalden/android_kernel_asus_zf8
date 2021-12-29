@@ -228,21 +228,11 @@ ssize_t  ATT_FRGB_store_switch_onoff(struct device *dev,
 ssize_t  ATT_FRGB_show_allreg(struct device *dev, 
 	struct device_attribute *attr, char *buf)
 {
-#ifndef CONFIG_TMD2755_FLAG
-	bool ret = 0;
-#endif
-
 	if(g_FRGB_ATTR->ATTR_Extension->FRGB_show_allreg== NULL) {
 		err("FRGB_show_allreg NOT SUPPORT. \n");
 		return sprintf(buf, "NOT SUPPORT\n");
 	}
-	
-#ifdef CONFIG_TMD2755_FLAG
 	return g_FRGB_ATTR->ATTR_Extension->FRGB_show_allreg(dev, attr, buf);
-#else
-	ret=g_FRGB_ATTR->ATTR_Extension->FRGB_show_allreg();
-	return sprintf(buf, "%d\n", ret);
-#endif
 }
 
 ssize_t  ATT_FRGB_show_log_threshold(struct device *dev, 

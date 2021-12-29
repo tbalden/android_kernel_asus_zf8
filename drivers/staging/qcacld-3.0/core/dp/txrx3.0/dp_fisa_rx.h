@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -22,7 +22,7 @@
 #ifdef FISA_DEBUG_ENABLE
 #define dp_fisa_debug dp_info
 #else
-#define dp_fisa_debug dp_debug
+#define dp_fisa_debug(params...)
 #endif
 
 #if defined(WLAN_SUPPORT_RX_FISA)
@@ -41,6 +41,8 @@
 #define IPSEC_PORT 500
 #define IPSEC_NAT_PORT 4500
 
+#define DP_FT_LOCK_MAX_RECORDS 32
+
 struct dp_fisa_rx_fst_update_elem {
 	/* Do not add new entries here */
 	qdf_list_node_t node;
@@ -51,6 +53,23 @@ struct dp_fisa_rx_fst_update_elem {
 	bool is_tcp_flow;
 	bool is_udp_flow;
 	u8 reo_id;
+};
+
+enum dp_ft_lock_event_type {
+	DP_FT_LOCK_EVENT,
+	DP_FT_UNLOCK_EVENT,
+};
+
+struct dp_ft_lock_record {
+	const char *func;
+	int cpu_id;
+	uint64_t timestamp;
+	enum dp_ft_lock_event_type type;
+};
+
+struct dp_ft_lock_history {
+	uint32_t record_idx;
+	struct dp_ft_lock_record ft_lock_rec[DP_FT_LOCK_MAX_RECORDS];
 };
 
 /**
@@ -125,6 +144,22 @@ void dp_set_fisa_disallowed_for_vdev(struct cdp_soc_t *cdp_soc, uint8_t vdev_id,
  * Return: None
  */
 void dp_fisa_rx_fst_update_work(void *arg);
+
+/**
+ * dp_suspend_fse_cache_flush() - Suspend FSE cache flush
+ * @soc: core txrx main context
+ *
+ * Return: None
+ */
+void dp_suspend_fse_cache_flush(struct dp_soc *soc);
+
+/**
+ * dp_resume_fse_cache_flush() - Resume FSE cache flush
+ * @soc: core txrx main context
+ *
+ * Return: None
+ */
+void dp_resume_fse_cache_flush(struct dp_soc *soc);
 #else
 static QDF_STATUS dp_rx_dump_fisa_stats(struct dp_soc *soc)
 {

@@ -265,7 +265,7 @@ static ssize_t  ATT_light_show_allreg(struct device *dev,
 		err("2nd IRsensor_show_allreg NOT SUPPORT. \n");
 		return sprintf(buf, "NOT SUPPORT\n");
 	}
-	ret=g_light_ATTR->ATTR_Extension->light_show_allreg();
+	ret=g_light_ATTR->ATTR_Extension->light_show_allreg(dev, attr, buf);
 	return sprintf(buf, "%d\n", ret);
 }
 

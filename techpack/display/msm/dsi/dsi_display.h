@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2015-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2015-2021, The Linux Foundation. All rights reserved.
  */
 
 #ifndef _DSI_DISPLAY_H_
@@ -192,8 +192,10 @@ struct dsi_display_ext_bridge {
  * @is_active:        status of the display
  * @trusted_vm_env:   Set to true, it the executing VM is Trusted VM.
  *                    Set to false, otherwise.
+ * @hw_ownership:     Indicates if VM owns the hardware resources.
  * @tx_cmd_buf_ndx:   Index to the DSI debugfs TX CMD buffer.
  * @cmd_set:	      Debugfs TX cmd set.
+ * @enabled:	      Boolean to indicate display enabled.
  */
 struct dsi_display {
 	struct platform_device *pdev;
@@ -294,9 +296,12 @@ struct dsi_display {
 	u32 cnt;
 	u8 cmd_data_type;
 #endif
+	bool hw_ownership;
 
 	int tx_cmd_buf_ndx;
 	struct dsi_panel_cmd_set cmd_set;
+
+	bool enabled;
 };
 
 int dsi_display_dev_probe(struct platform_device *pdev);
@@ -784,5 +789,11 @@ int dsi_display_get_panel_vfp(void *display,
  * Return: Zero on Success
  */
 int dsi_display_dump_clks_state(struct dsi_display *display);
+
+/**
+ * dsi_display_dfps_update_parent() - update dsi clock parent to src clock
+ * @display:         Handle to display
+ */
+void dsi_display_dfps_update_parent(struct dsi_display *display);
 
 #endif /* _DSI_DISPLAY_H_ */

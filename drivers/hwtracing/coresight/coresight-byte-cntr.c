@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
-/* Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
  *
  * Description: CoreSight Trace Memory Controller driver
  */
@@ -207,6 +207,24 @@ static int usb_bypass_start(struct byte_cntr *byte_cntr_data)
 		return -EINVAL;
 	}
 
+	/*Ensure usbch is ready*/
+	if (!tmcdrvdata->usbch) {
+		int i;
+
+		for (i = TIMEOUT_US; i > 0; i--) {
+			if (tmcdrvdata->usbch)
+				break;
+
+			if (i - 1)
+				udelay(1);
+			else {
+				dev_err(&tmcdrvdata->csdev->dev,
+					"timeout while waiting usbch to be ready\n");
+				mutex_unlock(&byte_cntr_data->usb_bypass_lock);
+				return -EAGAIN;
+			}
+		}
+	}
 	atomic_set(&byte_cntr_data->usb_free_buf, USB_BUF_NUM);
 
 	offset = tmc_sg_get_rwp_offset(tmcdrvdata);
@@ -554,7 +572,7 @@ void usb_bypass_notifier(void *priv, unsigned int event,
 		return;
 
 	if (tmcdrvdata->out_mode != TMC_ETR_OUT_MODE_USB) {
-		dev_err(&tmcdrvdata->csdev->dev,
+		dev_err_ratelimited(&tmcdrvdata->csdev->dev,
 		"%s: ETR is not USB mode\n", __func__);
 		return;
 	}
@@ -571,7 +589,7 @@ void usb_bypass_notifier(void *priv, unsigned int event,
 
 	case USB_QDSS_DISCONNECT:
 		if (tmcdrvdata->mode == CS_MODE_DISABLED) {
-			dev_err(&tmcdrvdata->csdev->dev,
+			dev_err_ratelimited(&tmcdrvdata->csdev->dev,
 			 "%s: ETR is disabled.\n", __func__);
 			return;
 		}

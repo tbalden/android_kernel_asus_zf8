@@ -36,7 +36,7 @@
 /*****************************************************************************
 * Macro definitions using #define
 *****************************************************************************/
-#define FTS_DRIVER_VERSION                  "Focaltech V3.2 20200422"
+#define FTS_DRIVER_VERSION                  "Focaltech V3.3 20201229"
 
 #define BYTE_OFF_0(x)           (u8)((x) & 0xFF)
 #define BYTE_OFF_8(x)           (u8)(((x) >> 8) & 0xFF)
@@ -54,8 +54,10 @@
 #define FTS_CHIP_IDC            ((FTS_CHIP_TYPE & FLAGBIT(FLAG_IDC_BIT)) == FLAGBIT(FLAG_IDC_BIT))
 #define FTS_HID_SUPPORTTED      ((FTS_CHIP_TYPE & FLAGBIT(FLAG_HID_BIT)) == FLAGBIT(FLAG_HID_BIT))
 
+#define FTS_MAX_CHIP_IDS        8
+
 #define FTS_CHIP_TYPE_MAPPING {{0x88, 0x56, 0x52, 0x00, 0x00, 0x00, 0x00, 0x56, 0xB2}}
-#define FTS_CHIP_TYPE_MAPPING_3518 {{0x81, 0x54, 0x52, 0x54, 0x52, 0x00, 0x00, 0x54, 0x5C}}
+
 
 #define FILE_NAME_LENGTH                    128
 #define ENABLE                              1
@@ -120,7 +122,7 @@
 * Global variable or extern global variabls/functions
 *****************************************************************************/
 struct ft_chip_t {
-    u64 type;
+    u16 type;
     u8 chip_idh;
     u8 chip_idl;
     u8 rom_idh;
@@ -131,10 +133,16 @@ struct ft_chip_t {
     u8 bl_idl;
 };
 
+struct ft_chip_id_t {
+    u16 type;
+    u16 chip_ids[FTS_MAX_CHIP_IDS];
+};
+
 struct ts_ic_info {
     bool is_incell;
     bool hid_supported;
     struct ft_chip_t ids;
+    struct ft_chip_id_t cid;
 };
 
 /*****************************************************************************

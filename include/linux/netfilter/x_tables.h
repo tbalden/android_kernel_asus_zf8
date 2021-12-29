@@ -232,6 +232,7 @@ struct xt_table {
 #else
         struct xt_table_info *private;
 #endif
+
 	/* Set this to THIS_MODULE if you are a module, otherwise NULL */
 	struct module *me;
 

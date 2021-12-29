@@ -457,8 +457,6 @@ struct tmd2755_chip {
 	u8 device_index;
 };
 
-
-
 #define TMD2755_PROXIMITY_INF_DEFAULT     (0)
 #define TMD2755_PROXIMITY_OFFSET_DEFAULT     (76)
 #define TMD2755_PROXIMITY_THDL_DEFAULT    (145)

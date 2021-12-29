@@ -369,6 +369,12 @@ int fts_ex_mode_recovery(struct fts_ts_data *ts_data)
         if (ret >= 0) {
 	    ts_data->charger_mode = ENABLE;
         }
+    } else {
+        FTS_INFO("Charge mode disabled, receive usb plug message when suspend, restore charge mode");
+        ret = fts_ex_mode_switch(MODE_CHARGER, DISABLE);
+        if (ret >= 0) {
+	    ts_data->charger_mode = DISABLE;
+        }
     }
 
     return 0;

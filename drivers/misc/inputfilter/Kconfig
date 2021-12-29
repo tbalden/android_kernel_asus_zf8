@@ -1,6 +1,0 @@
-config SWEEP2SLEEP
-        tristate "Sweep to put device to sleep"
-        default y
-        help
-          Say Y here to support sweep2sleep
-

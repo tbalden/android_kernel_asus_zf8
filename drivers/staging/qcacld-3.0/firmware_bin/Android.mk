@@ -19,7 +19,7 @@ ifeq ($(ASUS_BUILD_PROJECT),ZS675KW)
 $(shell cp $(LOCAL_PATH)/picasso_bdwlan.e47 $(TARGET_OUT_VENDOR)/firmware/bdwlan.elf)
 endif
 
-$(shell cp $(LOCAL_PATH)/WCNSS_qcom_cfg.ini $(TARGET_OUT_VENDOR)/firmware/wlan/qca_cld/WCNSS_qcom_cfg.ini)
+$(shell cp $(LOCAL_PATH)/WCNSS_qcom_cfg.ini $(TARGET_OUT_VENDOR)/firmware/wlan/qca_cld/wlan/WCNSS_qcom_cfg.ini)
 
 $(shell cp $(LOCAL_PATH)/amss.bin $(TARGET_OUT_VENDOR)/firmware/)
 $(shell cp $(LOCAL_PATH)/m3.bin $(TARGET_OUT_VENDOR)/firmware/)

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -30,6 +30,10 @@
 #include "qdf_event.h"
 /* For WMI_MAX_CHAINS */
 #include "wmi_unified.h"
+
+#ifdef QCA_SUPPORT_MC_CP_STATS
+#include "wlan_cp_stats_public_structs.h"
+#endif
 
 #ifdef WLAN_SUPPORT_TWT
 
@@ -129,6 +133,7 @@ enum txrate_gi {
  * @pno_complete_wake_up_count: pno complete wakeup count
  * @pno_match_wake_up_count:    pno match wakeup count
  * @oem_response_wake_up_count: oem response wakeup count
+ * @uc_drop_wake_up_count:      local data uc drop wakeup count
  * @pwr_save_fail_detected:     pwr save fail detected wakeup count
  * @scan_11d                    11d scan wakeup count
  * @mgmt_assoc: association request management frame
@@ -156,6 +161,7 @@ struct wake_lock_stats {
 	uint32_t pno_complete_wake_up_count;
 	uint32_t pno_match_wake_up_count;
 	uint32_t oem_response_wake_up_count;
+	uint32_t uc_drop_wake_up_count;
 	uint32_t pwr_save_fail_detected;
 	uint32_t scan_11d;
 	uint32_t mgmt_assoc;

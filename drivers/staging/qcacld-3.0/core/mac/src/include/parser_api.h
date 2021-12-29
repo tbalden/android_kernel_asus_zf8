@@ -84,6 +84,8 @@
 #define SIZE_MASK 0x7FFF
 #define FIXED_MASK 0x8000
 
+#define MAX_TPE_IES 8
+
 #ifdef FEATURE_AP_MCC_CH_AVOIDANCE
 #define QCOM_VENDOR_IE_MCC_AVOID_CH 0x01
 
@@ -193,6 +195,19 @@ struct sir_fils_indication {
 };
 #endif
 
+enum operating_class_num {
+	OP_CLASS_131 = 131,
+	OP_CLASS_132,
+	OP_CLASS_133,
+	OP_CLASS_134,
+	OP_CLASS_135,
+	OP_CLASS_136,
+};
+
+enum operating_extension_identifier {
+	OP_CLASS_ID_200 = 200,
+};
+
 /* Structure common to Beacons & Probe Responses */
 typedef struct sSirProbeRespBeacon {
 	tSirMacTimeStamp timeStamp;
@@ -288,6 +303,9 @@ typedef struct sSirProbeRespBeacon {
 #ifdef WLAN_FEATURE_FILS_SK
 	struct sir_fils_indication fils_ind;
 #endif
+	uint8_t num_transmit_power_env;
+	tDot11fIEtransmit_power_env transmit_power_env[MAX_TPE_IES];
+	uint8_t ap_power_type;
 } tSirProbeRespBeacon, *tpSirProbeRespBeacon;
 
 /* probe Request structure */
@@ -700,9 +718,11 @@ populate_dot_11_f_ext_chann_switch_ann(struct mac_context *mac_ptr,
 				struct pe_session *session_entry);
 
 void
-populate_dot11f_vht_tx_power_env(struct mac_context *mac,
-				 tDot11fIEvht_transmit_power_env *pDot11f,
-				 enum phy_ch_width ch_width, uint32_t chan_freq);
+populate_dot11f_tx_power_env(struct mac_context *mac,
+			     tDot11fIEtransmit_power_env *pDot11f,
+			     enum phy_ch_width ch_width, uint32_t chan_freq,
+			     uint16_t *num_tpe, bool is_ch_switch);
+
 /* / Populate a tDot11fIEChannelSwitchWrapper */
 void
 populate_dot11f_chan_switch_wrapper(struct mac_context *mac,
@@ -1210,7 +1230,7 @@ static inline QDF_STATUS populate_dot11f_he_bss_color_change(
 }
 #endif
 
-#ifdef WLAN_SUPPORT_TWT
+#if defined(WLAN_FEATURE_11AX) && defined(WLAN_SUPPORT_TWT)
 /**
  * populate_dot11f_twt_extended_caps() - populate TWT extended capabilities
  * @mac_ctx: Global MAC context.

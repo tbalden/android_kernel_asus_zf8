@@ -72,7 +72,7 @@ int fts_read(u8 *cmd, u32 cmdlen, u8 *data, u32 datalen)
 
     /* must have data when read */
     if (!ts_data || !ts_data->client || !data || !datalen
-        || (datalen >= I2C_BUF_LENGTH) || (cmdlen >= I2C_BUF_LENGTH)) {
+        || (datalen > I2C_BUF_LENGTH) || (cmdlen > I2C_BUF_LENGTH)) {
         FTS_ERROR("fts_data/client/cmdlen(%d)/data/datalen(%d) is invalid",
                   cmdlen, datalen);
         return -EINVAL;
@@ -120,7 +120,7 @@ int fts_write(u8 *writebuf, u32 writelen)
     struct i2c_msg msgs;
 
     if (!ts_data || !ts_data->client || !writebuf || !writelen
-        || (writelen >= I2C_BUF_LENGTH)) {
+        || (writelen > I2C_BUF_LENGTH)) {
         FTS_ERROR("fts_data/client/data/datalen(%d) is invalid", writelen);
         return -EINVAL;
     }

@@ -65,7 +65,7 @@
 &qupv3_se15_i2c{
 	nq@28{
 	    status = "ok";
-	    qcom,sn-ven = <&tlmm 66 0x00>;
+	    nxp,pn544-ven = <&tlmm 66 0x00>;
 	};
 };
 //ASUS_BSP: NFC ---

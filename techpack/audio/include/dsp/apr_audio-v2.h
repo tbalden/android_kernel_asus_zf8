@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2021, The Linux Foundation. All rights reserved.
  */
 
 
@@ -1358,6 +1358,7 @@ struct adm_cmd_connect_afe_port_v5 {
 #define INT_FM_TX 0x3005
 #define RT_PROXY_PORT_001_RX	0x2000
 #define RT_PROXY_PORT_001_TX	0x2001
+#define RT_PROXY_PORT_002_RX	0x2002
 #define AFE_LOOPBACK_TX	0x6001
 #define HDMI_RX_MS			0x6002
 #define DISPLAY_PORT_RX	0x6020
@@ -1521,6 +1522,7 @@ struct adm_cmd_connect_afe_port_v5 {
 
 #define  AFE_PORT_ID_RT_PROXY_PORT_001_RX   0x2000
 #define  AFE_PORT_ID_RT_PROXY_PORT_001_TX   0x2001
+#define  AFE_PORT_ID_RT_PROXY_PORT_002_RX   0x2002
 #define AFE_PORT_ID_INTERNAL_BT_SCO_RX      0x3000
 #define AFE_PORT_ID_INTERNAL_BT_SCO_TX      0x3001
 #define AFE_PORT_ID_INTERNAL_BT_A2DP_RX     0x3002
@@ -5587,6 +5589,7 @@ struct afe_param_id_lpass_core_shared_clk_cfg {
 #define ADM_CMD_COPP_OPEN_TOPOLOGY_ID_AUDIOSPHERE	0x10028000
 #define VPM_TX_DM_FLUENCE_EF_COPP_TOPOLOGY		0x10000005
 #define AUDIO_RX_MONO_VOIP_COPP_TOPOLOGY		0x11000101
+#define VPM_TX_VOICE_FLUENCE_NN_COPP_TOPOLOGY		0x10028008
 
 /* Memory map regions command payload used by the
  * #ASM_CMD_SHARED_MEM_MAP_REGIONS ,#ADM_CMD_SHARED_MEM_MAP_REGIONS
@@ -12346,16 +12349,15 @@ struct afe_clk_cfg {
 #define AFE_MODULE_CLOCK_SET		0x0001028F
 #define AFE_PARAM_ID_CLOCK_SET		0x00010290
 
-struct afe_set_clk_drift {
-	/*
-	 * Clock ID
-	 *	@values
-	 *	- 0x100 to 0x10E
-	 *	- 0x200 to 0x20C
-	 *	- 0x500 to 0x505
-	 */
-	uint32_t clk_id;
+#define CLK_SRC_NAME_MAX 32
 
+enum {
+	CLK_SRC_INTEGRAL,
+	CLK_SRC_FRACT,
+	CLK_SRC_MAX
+};
+
+struct afe_set_clk_drift {
 	/*
 	 * Clock drift  (in PPB) to be set.
 	 *	@values
@@ -12364,12 +12366,20 @@ struct afe_set_clk_drift {
 	int32_t clk_drift;
 
 	/*
-	 * Clock rest.
+	 * Clock reset.
 	 *	@values
 	 *	- 1 -- Reset PLL with the original frequency
 	 *	- 0 -- Adjust the clock with the clk drift value
 	 */
 	uint32_t clk_reset;
+	/*
+	 * Clock src name.
+	 *  @values
+	 *  - values to be set from machine driver
+	 *  - LPAPLL0 -- integral clk src
+	 *  - LPAPLL2 -- fractional clk src
+	 */
+	char clk_src_name[CLK_SRC_NAME_MAX];
 } __packed;
 
 /* This param id is used to adjust audio interface PLL*/
@@ -12748,8 +12758,8 @@ struct afe_param_id_group_device_tdm_cfg {
 	 */
 
 	u32	num_channels;
-	/* Number of enabled slots for TDM frame.
-	 * @values 1 to 8
+	/* Number of active channels = num of active slots * num of active lanes.
+	 * @values 1 to 64
 	 */
 
 	u32	sample_rate;

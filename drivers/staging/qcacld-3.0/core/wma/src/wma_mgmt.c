@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -889,46 +889,6 @@ static inline uint8_t wma_parse_mpdudensity(uint8_t mpdudensity)
 		return 0;
 }
 
-#if defined(CONFIG_HL_SUPPORT) && defined(FEATURE_WLAN_TDLS)
-
-/**
- * wma_unified_peer_state_update() - update peer state
- * @sta_mac: pointer to sta mac addr
- * @bss_addr: bss address
- * @sta_type: sta entry type
- *
- *
- * Return: None
- */
-static void
-wma_unified_peer_state_update(
-	uint8_t *sta_mac,
-	uint8_t *bss_addr,
-	uint8_t sta_type)
-{
-	void *soc = cds_get_context(QDF_MODULE_ID_SOC);
-
-	if (STA_ENTRY_TDLS_PEER == sta_type)
-		cdp_peer_state_update(soc, sta_mac,
-				      OL_TXRX_PEER_STATE_AUTH);
-	else
-		cdp_peer_state_update(soc, bss_addr,
-				      OL_TXRX_PEER_STATE_AUTH);
-}
-#else
-
-static inline void
-wma_unified_peer_state_update(
-	uint8_t *sta_mac,
-	uint8_t *bss_addr,
-	uint8_t sta_type)
-{
-	void *soc = cds_get_context(QDF_MODULE_ID_SOC);
-
-	cdp_peer_state_update(soc, bss_addr, OL_TXRX_PEER_STATE_AUTH);
-}
-#endif
-
 #define CFG_CTRL_MASK              0xFF00
 #define CFG_DATA_MASK              0x00FF
 
@@ -1280,6 +1240,7 @@ QDF_STATUS wma_send_peer_assoc(tp_wma_handle wma,
 	QDF_STATUS status;
 	struct mac_context *mac = wma->mac_context;
 	struct wlan_channel *des_chan;
+	int32_t keymgmt, uccipher, authmode;
 
 	cmd = qdf_mem_malloc(sizeof(struct peer_assoc_params));
 	if (!cmd) {
@@ -1492,9 +1453,6 @@ QDF_STATUS wma_send_peer_assoc(tp_wma_handle wma,
 	if (params->wpa_rsn >> 1)
 		cmd->need_gtk_2_way = 1;
 
-	wma_unified_peer_state_update(params->staMac,
-				      params->bssId, params->staType);
-
 #ifdef FEATURE_WLAN_WAPI
 	if (params->encryptType == eSIR_ED_WPI) {
 		ret = wma_vdev_set_param(wma->wmi_handle, params->smesessionId,
@@ -1554,13 +1512,14 @@ QDF_STATUS wma_send_peer_assoc(tp_wma_handle wma,
 		cmd->rx_mcs_set = params->supportedRates.vhtRxMCSMap;
 		cmd->tx_max_rate = params->supportedRates.vhtTxHighestDataRate;
 		cmd->tx_mcs_set = params->supportedRates.vhtTxMCSMap;
-
-		if (params->vhtSupportedRxNss) {
+		/*
+		 *  tx_mcs_set is intersection of self tx NSS and peer rx mcs map
+		 */
+		if (params->vhtSupportedRxNss)
 			cmd->peer_nss = params->vhtSupportedRxNss;
-		} else {
-			cmd->peer_nss = ((cmd->rx_mcs_set & VHT2x2MCSMASK)
-					 == VHT2x2MCSMASK) ? 1 : 2;
-		}
+		else
+			cmd->peer_nss = ((cmd->tx_mcs_set & VHT2x2MCSMASK)
+					== VHT2x2MCSMASK) ? 1 : 2;
 
 		if (params->vht_mcs_10_11_supp) {
 			WMI_SET_BITS(cmd->tx_mcs_set, 16, cmd->peer_nss,
@@ -1608,6 +1567,16 @@ QDF_STATUS wma_send_peer_assoc(tp_wma_handle wma,
 
 	/* Till conversion is not done in WMI we need to fill fw phy mode */
 	cmd->peer_phymode = wma_host_to_fw_phymode(phymode);
+
+	keymgmt = wlan_crypto_get_param(intr->vdev, WLAN_CRYPTO_PARAM_KEY_MGMT);
+	authmode = wlan_crypto_get_param(intr->vdev,
+					 WLAN_CRYPTO_PARAM_AUTH_MODE);
+	uccipher = wlan_crypto_get_param(intr->vdev,
+					 WLAN_CRYPTO_PARAM_UCAST_CIPHER);
+
+	cmd->akm = cm_crypto_authmode_to_wmi_authmode(authmode,
+						      keymgmt,
+						      uccipher);
 
 	status = wmi_unified_peer_assoc_send(wma->wmi_handle,
 					 cmd);
@@ -3167,7 +3136,7 @@ int wma_process_rmf_frame(tp_wma_handle wma_handle,
 			return -EINVAL;
 		}
 
-		if (rx_pkt->pkt_meta.mpdu_data_len > WMA_MAX_MGMT_MPDU_LEN) {
+		if (rx_pkt->pkt_meta.mpdu_data_len > MAX_MGMT_MPDU_LEN) {
 			wma_err("Data Len %d greater than max, dropping frame",
 				rx_pkt->pkt_meta.mpdu_data_len);
 			cds_pkt_return_packet(rx_pkt);
@@ -3439,7 +3408,7 @@ int wma_form_rx_packet(qdf_nbuf_t buf,
 	/*
 	 * If the mpdu_data_len is greater than Max (2k), drop the frame
 	 */
-	if (rx_pkt->pkt_meta.mpdu_data_len > WMA_MAX_MGMT_MPDU_LEN) {
+	if (rx_pkt->pkt_meta.mpdu_data_len > MAX_MGMT_MPDU_LEN) {
 		wma_err("Data Len %d greater than max, dropping frame from "QDF_MAC_ADDR_FMT,
 			 rx_pkt->pkt_meta.mpdu_data_len,
 			 QDF_MAC_ADDR_REF(wh->i_addr3));

@@ -1112,18 +1112,7 @@ static int latch_ak09973_probe(struct i2c_client *client, const struct i2c_devic
 		goto probe_err;
 	} else
 		log_ak09973("[latch_ak09973] I2C function test pass\n");
-	//register for class
-	ret = latch_setup();
-	if (ret < 0) {
-		log_ak09973("[latch_ak09973]latch misc dev setup error\n");
-		goto probe_err;
-	}
-	// Register the class node
-	ret = class_register(&asus_latch_class);
-	if (ret) {
-		pr_err("%s: Failed to register asus_latch class\n", __func__);
-		goto probe_err;
-	}
+	
 	mutex_lock(&latch_ak09973_dev->latch_mutex);
 	latch_write_bytes(client,0x30,0);
 	mutex_unlock(&latch_ak09973_dev->latch_mutex);
@@ -1147,6 +1136,19 @@ static int latch_ak09973_probe(struct i2c_client *client, const struct i2c_devic
 	}
 	mutex_unlock(&latch_ak09973_dev->latch_mutex);
 	msleep(5);
+
+	//register for class
+	ret = latch_setup();
+	if (ret < 0) {
+		log_ak09973("[latch_ak09973]latch misc dev setup error\n");
+		goto probe_err;
+	}
+	// Register the class node
+	ret = class_register(&asus_latch_class);
+	if (ret) {
+		pr_err("%s: Failed to register asus_latch class\n", __func__);
+		goto probe_err;
+	}
 
 	/* Work Queue init */
     latch_ak09973_wq = create_singlethread_workqueue("latch_ak09973_wq");

@@ -1005,7 +1005,7 @@ int fts_flash_write_buf(
  *
  * Warning: can't call this function directly, need call in boot environment
  ***********************************************************************/
-static int fts_flash_read_buf(u32 saddr, u8 *buf, u32 len)
+int fts_flash_read_buf(u32 saddr, u8 *buf, u32 len)
 {
     int ret = 0;
     u32 i = 0;
@@ -1797,7 +1797,6 @@ static int fts_fwupg_get_vendorid(struct fts_upgrade *upg, int *vid)
     u8 vendor_id = 0;
     u8 module_id = 0;
     u32 fwcfg_addr = 0;
-    u8 cmd = 0;
     u8 cfgbuf[FTS_HEADER_LEN] = { 0 };
 
     FTS_INFO("read vendor id from tp");
@@ -1812,13 +1811,8 @@ static int fts_fwupg_get_vendorid(struct fts_upgrade *upg, int *vid)
         if (upg->ts_data->ic_info.is_incell)
             ret = fts_read_reg(FTS_REG_MODULE_ID, &module_id);
     } else {
-        if (upg->func->upgspec_version >= UPGRADE_SPEC_V_1_0) {
-            cmd = FTS_CMD_READ_FW_CONF;
-            ret = fts_read(&cmd, 1, cfgbuf, FTS_HEADER_LEN);
-        } else {
-            fwcfg_addr =  upg->func->fwcfgoff;
-            ret = fts_flash_read(fwcfg_addr, cfgbuf, FTS_HEADER_LEN);
-        }
+        fwcfg_addr =  upg->func->fwcfgoff;
+        ret = fts_flash_read(fwcfg_addr, cfgbuf, FTS_HEADER_LEN);
 
         if ((cfgbuf[FTS_CONIFG_VENDORID_OFF] +
              cfgbuf[FTS_CONIFG_VENDORID_OFF + 1]) == 0xFF)
@@ -1918,7 +1912,6 @@ static int fts_get_fw_file_via_request_firmware(struct fts_upgrade *upg)
 
 static int fts_get_fw_file_via_i(struct fts_upgrade *upg)
 {
-    FTS_DEBUG("fts_get_fw_file_via_i");
     upg->fw = upg->module_info->fw_file;
     upg->fw_length = upg->module_info->fw_len;
     upg->fw_from_request = 0;
@@ -2045,7 +2038,7 @@ int fts_fwupg_init(struct fts_ts_data *ts_data)
 {
     int i = 0;
     int j = 0;
-    int ic_stype = 0;
+    u16 ic_stype = 0;
     struct upgrade_func *func = upgrade_func_list[0];
     int func_count = sizeof(upgrade_func_list) / sizeof(upgrade_func_list[0]);
 
@@ -2073,7 +2066,7 @@ int fts_fwupg_init(struct fts_ts_data *ts_data)
     } else {
         for (i = 0; i < func_count; i++) {
             func = upgrade_func_list[i];
-            for (j = 0; j < FTX_MAX_COMPATIBLE_TYPE; j++) {
+            for (j = 0; j < FTS_MAX_COMPATIBLE_TYPE; j++) {
                 if (0 == func->ctype[j])
                     break;
                 else if (func->ctype[j] == ic_stype) {

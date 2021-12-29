@@ -15,6 +15,7 @@
  /************************************/
 /* Light Sensor Factory Module */
 /***********************************/
+#include <linux/version.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/fs.h>
@@ -58,7 +59,11 @@ int lsensor_factory_read_200lux(const char *str)
 
 	if (fp->f_op != NULL) {
 		pos_lsts = 0;
+#if ((LINUX_VERSION_CODE >= KERNEL_VERSION(4,14,0)))
+		readlen = kernel_read(fp, buf, 16, &pos_lsts);
+#else
 		readlen = vfs_read(fp, buf, 16, &pos_lsts);
+#endif
 		buf[readlen] = '\0';
 	} else {
 		err("Light Sensor read 200lux Calibration f_op=NULL or op->read=NULL\n");
@@ -103,7 +108,11 @@ bool lsensor_factory_write_200lux(int calvalue, const char *str)
 
 	if (fp->f_op != NULL) {
 		pos_lsts = 0;
+#if ((LINUX_VERSION_CODE >= KERNEL_VERSION(4,14,0)))
+		kernel_write(fp, buf, strlen(buf), &fp->f_pos);
+#else
 		vfs_write(fp, buf, strlen(buf), &fp->f_pos);				
+#endif
 	} else {
 		err("Light Sensor write 200lux Calibration strlen: f_op=NULL or op->write=NULL\n");
 		set_fs(old_fs);
@@ -138,7 +147,11 @@ int lsensor_factory_read_1000lux(const char *str)
 
 	if (fp->f_op != NULL) {
 		pos_lsts = 0;
+#if ((LINUX_VERSION_CODE >= KERNEL_VERSION(4,14,0)))
+		readlen = kernel_read(fp, buf, 16, &pos_lsts);
+#else
 		readlen = vfs_read(fp, buf, 16, &pos_lsts);
+#endif
 		buf[readlen] = '\0';
 	} else {
 		err("Light Sensor read 1000lux Calibration f_op=NULL or op->read=NULL\n");
@@ -183,7 +196,11 @@ bool lsensor_factory_write_1000lux(int calvalue, const char *str)
 
 	if (fp->f_op != NULL) {
 		pos_lsts = 0;
+#if ((LINUX_VERSION_CODE >= KERNEL_VERSION(4,14,0)))
+		kernel_write(fp, buf, strlen(buf), &fp->f_pos);
+#else
 		vfs_write(fp, buf, strlen(buf), &fp->f_pos);				
+#endif
 	} else {
 		err("Light Sensor write 1000lux Calibration strlen: f_op=NULL or op->write=NULL\n");
 		set_fs(old_fs);
@@ -218,7 +235,11 @@ int lsensor_factory_read(const char *str)
 
 	if (fp->f_op != NULL) {
 		pos_lsts = 0;
+#if ((LINUX_VERSION_CODE >= KERNEL_VERSION(4,14,0)))
+		readlen = kernel_read(fp, buf, 16, &pos_lsts);
+#else
 		readlen = vfs_read(fp, buf, 16, &pos_lsts);
+#endif
 		buf[readlen] = '\0';
 	} else {
 		err("Light Sensor read Calibration f_op=NULL or op->read=NULL\n");
@@ -263,7 +284,11 @@ bool lsensor_factory_write(int calvalue, const char *str)
 
 	if (fp->f_op != NULL) {
 		pos_lsts = 0;
+#if ((LINUX_VERSION_CODE >= KERNEL_VERSION(4,14,0)))
+		kernel_write(fp, buf, strlen(buf), &fp->f_pos);
+#else
 		vfs_write(fp, buf, strlen(buf), &fp->f_pos);				
+#endif
 	} else {
 		err("Light Sensor write Calibration strlen: f_op=NULL or op->write=NULL\n");
 		set_fs(old_fs);
@@ -299,7 +324,11 @@ int lsensor_factory_read_50ms(const char *str)
 
 	if (fp->f_op != NULL) {
 		pos_lsts = 0;
+#if ((LINUX_VERSION_CODE >= KERNEL_VERSION(4,14,0)))
+		readlen = kernel_read(fp, buf, 16, &pos_lsts);
+#else
 		readlen = vfs_read(fp, buf, 16, &pos_lsts);
+#endif
 		buf[readlen] = '\0';
 	} else {
 		err("Light Sensor read 50MS Calibration f_op=NULL or op->read=NULL\n");
@@ -344,7 +373,11 @@ bool lsensor_factory_write_50ms(int calvalue, const char *str)
 
 	if (fp->f_op != NULL) {
 		pos_lsts = 0;
+#if ((LINUX_VERSION_CODE >= KERNEL_VERSION(4,14,0)))
+		kernel_write(fp, buf, strlen(buf), &fp->f_pos);
+#else
 		vfs_write(fp, buf, strlen(buf), &fp->f_pos);				
+#endif
 	} else {
 		err("Light Sensor write 50MS Calibration strlen: f_op=NULL or op->write=NULL\n");
 		set_fs(old_fs);
@@ -379,7 +412,11 @@ int lsensor_factory_read_100ms(const char *str)
 
 	if (fp->f_op != NULL) {
 		pos_lsts = 0;
+#if ((LINUX_VERSION_CODE >= KERNEL_VERSION(4,14,0)))
+		readlen = kernel_read(fp, buf, 16, &pos_lsts);
+#else
 		readlen = vfs_read(fp, buf, 16, &pos_lsts);
+#endif
 		buf[readlen] = '\0';
 	} else {
 		err("Light Sensor read 100MS Calibration f_op=NULL or op->read=NULL\n");
@@ -424,7 +461,11 @@ bool lsensor_factory_write_100ms(int calvalue, const char *str)
 
 	if (fp->f_op != NULL) {
 		pos_lsts = 0;
+#if ((LINUX_VERSION_CODE >= KERNEL_VERSION(4,14,0)))
+		kernel_write(fp, buf, strlen(buf), &fp->f_pos);
+#else
 		vfs_write(fp, buf, strlen(buf), &fp->f_pos);				
+#endif
 	} else {
 		err("Light Sensor write 100MS Calibration strlen: f_op=NULL or op->write=NULL\n");
 		set_fs(old_fs);

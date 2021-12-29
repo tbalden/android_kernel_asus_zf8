@@ -571,6 +571,7 @@ struct msm_vidc_inst {
 	bool external_blur;
 	struct internal_buf *dpb_extra_binfo;
 	struct msm_vidc_codec_data *codec_data;
+	bool hdr10_sei_enabled;
 	struct hal_hdr10_pq_sei hdr10_sei_params;
 	struct batch_mode batch;
 	struct delayed_work batch_work;
@@ -589,6 +590,7 @@ struct msm_vidc_inst {
 	u64 last_qbuf_time_ns;
 	bool active;
 	bool has_bframe;
+	bool boost_enabled;
 	bool boost_qp_enabled;
 	u32 boost_min_qp;
 	u32 boost_max_qp;

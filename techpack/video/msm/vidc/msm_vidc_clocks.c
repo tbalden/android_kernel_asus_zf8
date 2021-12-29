@@ -525,7 +525,10 @@ static int msm_dcvs_scale_clocks(struct msm_vidc_inst *inst,
 	} else if ((dcvs->dcvs_flags & MSM_VIDC_DCVS_DECR &&
 		    bufs_with_fw >= dcvs->nom_threshold) ||
 		   (dcvs->dcvs_flags & MSM_VIDC_DCVS_INCR &&
-		    bufs_with_fw <= dcvs->nom_threshold))
+		    bufs_with_fw <= dcvs->nom_threshold) ||
+		   (inst->session_type == MSM_VIDC_ENCODER &&
+		    dcvs->dcvs_flags & MSM_VIDC_DCVS_DECR &&
+		    bufs_with_fw >= dcvs->min_threshold))
 		dcvs->dcvs_flags = 0;
 
 	s_vpr_p(inst->sid, "DCVS: bufs_with_fw %d Th[%d %d %d] Flag %#x\n",
@@ -1279,6 +1282,7 @@ decision_done:
 
 	/* For WORK_MODE_1, set Low Latency mode by default to HW. */
 
+	latency.enable = false;
 	if (inst->session_type == MSM_VIDC_ENCODER &&
 			inst->clk_data.work_mode == HFI_WORKMODE_1) {
 		latency.enable = true;
@@ -1287,6 +1291,10 @@ decision_done:
 			HFI_PROPERTY_PARAM_VENC_LOW_LATENCY_MODE,
 			(void *)&latency, sizeof(latency));
 	}
+
+	s_vpr_h(inst->sid, "Configuring work mode = %u low latency = %u",
+			pdata.video_work_mode,
+			latency.enable);
 
 	rc = msm_comm_scale_clocks_and_bus(inst, 1);
 
@@ -1444,7 +1452,7 @@ static inline int msm_vidc_power_save_mode_enable(struct msm_vidc_inst *inst,
 			sizeof(hfi_perf_mode));
 	if (rc) {
 		s_vpr_e(inst->sid, "%s: Failed to set power save mode\n",
-			__func__, inst);
+			__func__);
 		return rc;
 	}
 	inst->flags = enable ?

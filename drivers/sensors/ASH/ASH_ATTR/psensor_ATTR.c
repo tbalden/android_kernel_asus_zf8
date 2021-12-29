@@ -191,87 +191,6 @@ static ssize_t ATT_proximity_store_calibration_inf(struct device *dev,
 	return count;
 }
 
-#ifdef CONFIG_TMD2755_FLAG
-static ssize_t ATT_proximity_show_calibration_offset(struct device *dev, 
-	struct device_attribute *attr, char *buf)
-{
-	int calvalue;
-
-	if(g_psensor_ATTR->ATTR_Calibration->proximity_show_calibration_offset == NULL) {
-		err("proximity_show_calibration_offset NOT SUPPORT. \n");
-		return sprintf(buf, "NOT SUPPORT\n");
-	}
-	
-	calvalue = g_psensor_ATTR->ATTR_Calibration->proximity_show_calibration_offset();
-	dbg("Proximity show Inf Calibration: %d\n", calvalue);
-	return sprintf(buf, "%d\n", calvalue);
-}
-
-static ssize_t ATT_proximity_store_calibration_offset(struct device *dev, 
-	struct device_attribute *attr, const char *buf, size_t count)
-{
-	unsigned long calvalue;
-
-	if(g_psensor_ATTR->ATTR_Calibration->proximity_store_calibration_offset == NULL) {
-		err("proximity_store_calibration_offset NOT SUPPORT. \n");
-		return count;
-	}
-	
-	if ((kstrtoul(buf, 10, &calvalue) < 0))
-		return -EINVAL;	
-	if(calvalue < 0) {
-		err("Proximity store Inf Calibration with NEGATIVE value. (%lu) \n", calvalue);
-		return -EINVAL;
-	}
-
-	log("Proximity store Inf Calibration: %lu\n", calvalue);
-	if(g_psensor_ATTR->ATTR_Calibration->proximity_store_calibration_offset(calvalue) < 0)
-		return -EINVAL;	
-	
-	return count;
-}
-
-static ssize_t ATT_proximity_show_oil_flag(struct device *dev, 
-	struct device_attribute *attr, char *buf)
-{
-	unsigned long flag;
-
-	if(g_psensor_ATTR->ATTR_Calibration->proximity_show_oil_flag == NULL) {
-		err("proximity_show oil_flag NOT SUPPORT. \n");
-		return sprintf(buf, "NOT SUPPORT\n");
-	}
-	
-	flag = g_psensor_ATTR->ATTR_Calibration->proximity_show_oil_flag();
-	dbg("Proximity show oil_flag: %d\n", flag);
-	return sprintf(buf, "%d\n", flag);
-}
-
-static ssize_t ATT_proximity_store_oil_flag(struct device *dev, 
-	struct device_attribute *attr, const char *buf, size_t count)
-{
-	unsigned long flag;
-
-	if(g_psensor_ATTR->ATTR_Calibration->proximity_store_oil_flag == NULL) {
-		err("proximity_store_oil_flag NOT SUPPORT. \n");
-		return count;
-	}
-	
-	if ((kstrtoul(buf, 10, &flag) < 0))
-		return -EINVAL;	
-	if(flag < 0) {
-		err("Proximity store oil_flag with NEGATIVE value. (%d) \n", flag);
-		return -EINVAL;
-	}
-
-	log("Proximity store oil_flag: %d\n", flag);
-	if(g_psensor_ATTR->ATTR_Calibration->proximity_store_oil_flag(flag) < 0)
-		return -EINVAL;	
-	
-	return count;
-}
-
-#endif
-
 static ssize_t ATT_proximity_show_adc(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	int adc = 0;
@@ -436,16 +355,9 @@ static ssize_t  ATT_proximity_show_allreg(struct device *dev,
 		return sprintf(buf, "NOT SUPPORT\n");
 	}
 	log("print all reg");
-#ifdef CONFIG_TMD2755_FLAG
 	return g_psensor_ATTR->ATTR_Extension->proximity_show_allreg(dev, attr, buf);
-#else
-	return g_psensor_ATTR->ATTR_Extension->proximity_show_allreg();
-#endif
 }
 
-#ifdef CONFIG_TMD2755_FLAG
-extern ssize_t tmd2755_registers_show(struct device *dev, struct device_attribute *attr, char *buf);
-#endif
 static ssize_t  ATT_proximity_show_polling_mode(struct device *dev, 
 	struct device_attribute *attr, char *buf)
 {
@@ -798,7 +710,123 @@ static ssize_t  ATT_proximity_store_anti_oil_enable(struct device *dev,
 	return count;
 }
 
-#ifdef CONFIG_TMD2755_FLAG
+static ssize_t ATT_proximity_show_calibration_offset(struct device *dev, 
+	struct device_attribute *attr, char *buf)
+{
+	int calvalue;
+
+	if(g_psensor_ATTR->ATTR_Calibration->proximity_show_calibration_offset == NULL) {
+		err("proximity_show_calibration_offset NOT SUPPORT. \n");
+		return sprintf(buf, "NOT SUPPORT\n");
+	}
+	
+	calvalue = g_psensor_ATTR->ATTR_Calibration->proximity_show_calibration_offset();
+	dbg("Proximity show Inf Calibration: %d\n", calvalue);
+	return sprintf(buf, "%d\n", calvalue);
+}
+
+static ssize_t ATT_proximity_store_calibration_offset(struct device *dev, 
+	struct device_attribute *attr, const char *buf, size_t count)
+{
+	unsigned long calvalue;
+
+	if(g_psensor_ATTR->ATTR_Calibration->proximity_store_calibration_offset == NULL) {
+		err("proximity_store_calibration_offset NOT SUPPORT. \n");
+		return count;
+	}
+	
+	if ((kstrtoul(buf, 10, &calvalue) < 0))
+		return -EINVAL;	
+	if(calvalue < 0) {
+		err("Proximity store Inf Calibration with NEGATIVE value. (%lu) \n", calvalue);
+		return -EINVAL;
+	}
+
+	log("Proximity store Inf Calibration: %lu\n", calvalue);
+	if(g_psensor_ATTR->ATTR_Calibration->proximity_store_calibration_offset(calvalue) < 0)
+		return -EINVAL;	
+	
+	return count;
+}
+
+static ssize_t ATT_proximity_show_oil_flag(struct device *dev, 
+	struct device_attribute *attr, char *buf)
+{
+	unsigned long flag;
+
+	if(g_psensor_ATTR->ATTR_Calibration->proximity_show_oil_flag == NULL) {
+		err("proximity_show oil_flag NOT SUPPORT. \n");
+		return sprintf(buf, "NOT SUPPORT\n");
+	}
+	
+	flag = g_psensor_ATTR->ATTR_Calibration->proximity_show_oil_flag();
+	dbg("Proximity show oil_flag: %d\n", flag);
+	return sprintf(buf, "%d\n", flag);
+}
+
+static ssize_t ATT_proximity_store_oil_flag(struct device *dev, 
+	struct device_attribute *attr, const char *buf, size_t count)
+{
+	unsigned long flag;
+
+	if(g_psensor_ATTR->ATTR_Calibration->proximity_store_oil_flag == NULL) {
+		err("proximity_store_oil_flag NOT SUPPORT. \n");
+		return count;
+	}
+	
+	if ((kstrtoul(buf, 10, &flag) < 0))
+		return -EINVAL;	
+	if(flag < 0) {
+		err("Proximity store oil_flag with NEGATIVE value. (%d) \n", flag);
+		return -EINVAL;
+	}
+
+	log("Proximity store oil_flag: %d\n", flag);
+	if(g_psensor_ATTR->ATTR_Calibration->proximity_store_oil_flag(flag) < 0)
+		return -EINVAL;	
+	
+	return count;
+}
+
+static ssize_t ATT_proximity_show_oil_timer(struct device *dev, 
+	struct device_attribute *attr, char *buf)
+{
+	unsigned long time;
+
+	if(g_psensor_ATTR->ATTR_Calibration->proximity_show_oil_timer == NULL) {
+		err("proximity_show oil_timer NOT SUPPORT. \n");
+		return sprintf(buf, "NOT SUPPORT\n");
+	}
+	
+	time = g_psensor_ATTR->ATTR_Calibration->proximity_show_oil_timer();
+	dbg("Proximity show oil_timer: %d\n", time);
+	return sprintf(buf, "%d\n", time);
+}
+
+static ssize_t ATT_proximity_store_oil_timer(struct device *dev, 
+	struct device_attribute *attr, const char *buf, size_t count)
+{
+	unsigned long time;
+
+	if(g_psensor_ATTR->ATTR_Calibration->proximity_store_oil_timer == NULL) {
+		err("proximity_store_oil_timer NOT SUPPORT. \n");
+		return count;
+	}
+	
+	if ((kstrtoul(buf, 10, &time) < 0))
+		return -EINVAL;	
+	if(time < 0) {
+		err("Proximity store oil_timer with NEGATIVE value. (%d) \n", time);
+		return -EINVAL;
+	}
+
+	log("Proximity store oil_timer: %d\n", time);
+	if(g_psensor_ATTR->ATTR_Calibration->proximity_store_oil_timer(time) < 0)
+		return -EINVAL;	
+	
+	return count;
+}
+
 static ssize_t  ATT_proximity_store_chip_cal_en(struct device *dev, 
 	struct device_attribute *attr, const char *buf, size_t count)
 {
@@ -817,7 +845,6 @@ static ssize_t  ATT_proximity_store_chip_cal_en(struct device *dev,
 
 	return count;
 }
-#endif
 
 static ssize_t  ATT_proximity_store_pocket_en(struct device *dev, 
 	struct device_attribute *attr, const char *buf, size_t count)
@@ -846,9 +873,6 @@ static struct device_attribute proximity_property_attrs[] = {
 	__ATTR(atd_status, 0444, ATT_proximity_show_atd_test, NULL),
 	__ATTR(proxm_status, 0444, ATT_proximity_show_status, NULL),	
 	__ATTR(dump_reg, 0444, ATT_proximity_show_allreg, NULL),
-#ifdef CONFIG_TMD2755_FLAG
-	__ATTR(regs, 0444, tmd2755_registers_show, NULL),
-#endif
 		/* +++ For stress test debug +++ */
 	__ATTR(int_counter, 0444, ATT_proximity_show_int_count, NULL),
 	__ATTR(event_counter, 0444, ATT_proximity_show_event_count, NULL),
@@ -859,10 +883,6 @@ static struct device_attribute proximity_property_attrs[] = {
 	__ATTR(hi_cal, 0664, ATT_proximity_show_calibration_hi, ATT_proximity_store_calibration_hi),
 	__ATTR(low_cal, 0664, ATT_proximity_show_calibration_lo, ATT_proximity_store_calibration_lo),
 	__ATTR(inf_cal, 0664, ATT_proximity_show_calibration_inf, ATT_proximity_store_calibration_inf),
-#ifdef CONFIG_TMD2755_FLAG
-	__ATTR(offset_cal, 0664, ATT_proximity_show_calibration_offset, ATT_proximity_store_calibration_offset),
-	__ATTR(oil_flag, 0664, ATT_proximity_show_oil_flag, ATT_proximity_store_oil_flag),
-#endif
 	__ATTR(poll_mode, 0664, ATT_proximity_show_polling_mode, ATT_proximity_store_polling_mode),
 	__ATTR(read_reg, 0664, ATT_proximity_show_read_reg, ATT_proximity_store_read_reg),
 	__ATTR(write_reg, 0220, NULL, ATT_proximity_store_write_reg),
@@ -872,18 +892,27 @@ static struct device_attribute proximity_property_attrs[] = {
 
 	/*For transition period from 3/5 to 2/4*/
 	__ATTR(selection, 0664, ATT_proximity_show_selection, ATT_proximity_store_selection),
-	
+
 	/*For power key turn on screen and enable touch*/
 	__ATTR(enable_touch, 0664, ATT_proximity_show_enable_touch, ATT_proximity_store_enable_touch),
-	
+
 	/*For load calibration data*/
 	__ATTR(load_cal, 0220, NULL, ATT_proximity_store_load_calibration_data),
-	
+
 	/*For power key turn on screen and enable touch*/
 	__ATTR(enable_anti_oil, 0664, ATT_proximity_show_anti_oil_enable, ATT_proximity_store_anti_oil_enable),
-#ifdef CONFIG_TMD2755_FLAG
-	__ATTR(chip_cal_en, 0664, NULL, ATT_proximity_store_chip_cal_en),
-#endif
+
+	/* tmd2755 autok results */
+	__ATTR(offset_cal, 0664, ATT_proximity_show_calibration_offset, ATT_proximity_store_calibration_offset),
+
+	/* For oil issue during phone call */
+	__ATTR(oil_flag, 0664, ATT_proximity_show_oil_flag, ATT_proximity_store_oil_flag),
+
+	/* set oil timer to do oil check during phone call */
+	__ATTR(oil_timer, 0664, ATT_proximity_show_oil_timer, ATT_proximity_store_oil_timer),
+
+	/* tmd2755 autok behavior on/off */
+	__ATTR(chip_cal_en, 0220, NULL, ATT_proximity_store_chip_cal_en),
 	__ATTR(pocket_en, 0664, NULL, ATT_proximity_store_pocket_en),
 };
 

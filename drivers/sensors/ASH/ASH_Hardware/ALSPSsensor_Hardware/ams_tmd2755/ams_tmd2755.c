@@ -80,19 +80,17 @@ MODULE_VERSION("1.10");
 #else
 	#define dbg(fmt, args...)
 #endif
-#define log(fmt, args...) printk(KERN_INFO "[%s][%s][%s]"fmt,MODULE_NAME,SENSOR_TYPE_NAME,__func__,##args)
+#define log(fmt, args...) printk(KERN_INFO "[%s]"fmt,MODULE_NAME,##args)
 #define err(fmt, args...) printk(KERN_ERR "[%s][%s]"fmt,MODULE_NAME,SENSOR_TYPE_NAME,##args)
 
 #include <linux/of_gpio.h>
 
-#ifdef CONFIG_TMD2755_FLAG
 #define ALSPS_QCOM_NAME 	"qcom,alsps-gpio"
 #define ALSPS_INT_NAME		"ALSPS_SENSOR_INT"
 #define ALSPS_IRQ_NAME		"ALSPS_SENSOR_IRQ"
 static int ALSPS_SENSOR_GPIO;
 static int ALSPS_SENSOR_IRQ;
 #define GPIO_LOOKUP_STATE	"alsps_gpio_high"
-#endif
 
 struct tmd2755_chip *g_tmd2755_chip;
 static struct i2c_client	*g_i2c_client = NULL;
@@ -101,8 +99,7 @@ static int tmd2755_regulator_enable(void);
 extern void tmd2755_read_prox(struct tmd2755_chip *chip);
 
 static void tmd2755_ist(struct work_struct *work);
-static struct work_struct tmd2755_ist_work;
-//static DECLARE_WORK(tmd2755_ist_work, tmd2755_ist);
+static struct delayed_work tmd2755_ist_work;
 
 /*********************************/
 
@@ -256,126 +253,6 @@ static const struct of_device_id tmd2755_of_match[] = {
 MODULE_DEVICE_TABLE(of, tmd2755_of_match);
 
 #endif /* CONFIG_OF */
-static void tmd2755_ist(struct work_struct *work){
-	u8 status;
-	int ret;
-	struct tmd2755_chip *chip = g_tmd2755_chip;
-	struct device *dev = &chip->client->dev;
-	bool psat_irq_enabled;
-	if(chip->in_suspend){
-			mdelay(TMD2755_WAIT_I2C_DELAY);
-			log("Wait i2c driver ready(%d ms)", TMD2755_WAIT_I2C_DELAY);
-	}
-
-	AMS_MUTEX_LOCK(&g_alsps_lock);
-	AMS_MUTEX_LOCK(&chip->lock);
-	ret = ams_i2c_read(chip->client, TMD2755_REG_STATUS, &chip->shadow[TMD2755_REG_STATUS]);
-	status = chip->shadow[TMD2755_REG_STATUS];
-	log("Enter 0x94=0x%x", status);
-	
-	/* Interrupt was not the tmd2755 */
-	if (status == 0) {
-		AMS_MUTEX_UNLOCK(&chip->lock);
-		AMS_MUTEX_UNLOCK(&g_alsps_lock);
-		__pm_relax(g_tmd2755_wake_lock);
-		enable_irq(ALSPS_SENSOR_IRQ);
-		return;
-	}
-	
-	/* Clear the Interrupt and begin processing */
-	ams_i2c_write_direct(chip->client, TMD2755_REG_STATUS, status);
-
-	/*************/
-	/* Proximity */
-	/*************/
-	/*
-	 * Zero Detect
-	 */ 
-	if (status & TMD2755_INT_ST_ZERODET_IRQ) {
-		u8 val;
-		dev_info(dev, "%*.*s():%*d --> ZINT Zero Detection Interrupt occurred\n",
-			MIN_KERNEL_LOG_LEN, MAX_KERNEL_LOG_LEN, __func__, LINE_NUM_KERNEL_LOG_LEN, __LINE__);
-		ams_i2c_read(chip->client,  TMD2755_REG_CALIB_OFF, &val);
-		if (val & TMD2755_MASK_ENABLE_ORE) { 
-			/* Get the new poffset */
-			ams_i2c_blk_read(chip->client, TMD2755_REG_POFFSET_L, &chip->shadow[TMD2755_REG_POFFSET_L], 2);
-			chip->params.poffset = chip->shadow[TMD2755_REG_POFFSET_L];
-			if (chip->shadow[TMD2755_REG_POFFSET_H] & TMD2755_MASK_POFFSET_H)
-				chip->params.poffset *= -1;
-
-			dev_info(dev, "%*.*s():%*d --> \t\tAdjusting poffset down by 1: poffsetl=%d, poffseth=%d\n",
-			MIN_KERNEL_LOG_LEN, MAX_KERNEL_LOG_LEN, __func__, LINE_NUM_KERNEL_LOG_LEN, __LINE__,
-			chip->shadow[TMD2755_REG_POFFSET_L], chip->shadow[TMD2755_REG_POFFSET_H] & TMD2755_MASK_POFFSET_H);	
-		}
-	}
-
-	/* Only report saturation if PSAT IRQ is enabled.  Saturation IRQ is disabled after the first */
-	/* occurence andf re-enabled on a release event.  However, the status bit is constantly updated */
-	/* with the actual condition.  Ignore the status bit if the PSAT IRQ is not enabled */
-	psat_irq_enabled = (chip->shadow[TMD2755_REG_INTENAB] & TMD2755_INT_ST_PRX_SAT_IRQ) >> TMD2755_INT_PRX_SAT_SHIFT;
-
-	if (psat_irq_enabled)
-		chip->in_psat = PROX_NO_SAT;  /* no saturation */
-
-	if ((status & TMD2755_INT_ST_PRX_SAT_IRQ) && psat_irq_enabled) {
-		dev_info(dev, "%*.*s():%*d --> PSAT Interrupt occurred\n",
-			MIN_KERNEL_LOG_LEN, MAX_KERNEL_LOG_LEN, __func__, LINE_NUM_KERNEL_LOG_LEN, __LINE__);
-		chip->in_psat = PROX_SAT;
-	}
-
-	if ((status & TMD2755_INT_ST_PSAT_AMBIENT_IRQ) && psat_irq_enabled) {
-		dev_info(dev, "%*.*s():%*d --> PSAT Ambient Interrupt occurred\n",
-			MIN_KERNEL_LOG_LEN, MAX_KERNEL_LOG_LEN, __func__, LINE_NUM_KERNEL_LOG_LEN, __LINE__);
-		chip->in_psat = PROX_AMBIENT_SAT;
-	}
-
-	if ((status & TMD2755_INT_ST_PSAT_REFLECT_IRQ) && psat_irq_enabled) {
-		dev_info(dev, "%*.*s():%*d --> PSAT Reflective Interrupt occurred\n",
-			MIN_KERNEL_LOG_LEN, MAX_KERNEL_LOG_LEN, __func__, LINE_NUM_KERNEL_LOG_LEN, __LINE__);
-		chip->in_psat = PROX_REFLECTIVE_SAT;
-	}
-
-	/* Report a saturation event */
-	if (chip->in_psat && psat_irq_enabled)
-		tmd2755_process_saturation_event(chip);
-
-	/* Process an actual prox event detect/release */
-	if (status & TMD2755_INT_ST_PRX_IRQ) {
-		/* Not using chip->in_psat because after the initial saturation it is not updated,  until */
-		/* the release event.                                                                     */
-		dev_dbg(dev, "%*.*s():%*d --> Proximity Interrupt Occurred - Saturation = %s\n",
-			MIN_KERNEL_LOG_LEN, MAX_KERNEL_LOG_LEN, __func__, LINE_NUM_KERNEL_LOG_LEN, __LINE__, 
-			(status & TMD2755_INT_ST_PRX_SAT_IRQ) ? "TRUE" : "FALSE");
-
-		tmd2755_process_prox_irq(chip);
-	}
-
-	/***************/
-	/* Calibration */
-	/***************/
-	/* If you get a calibration interrupt and you are in calibration, process */
-	if ((status & TMD2755_INT_ST_CALIB_IRQ) && chip->in_calib) {
-		dev_info(dev, "%*.*s():%*d --> Calibration Interrupt Occurred\n",  MIN_KERNEL_LOG_LEN, MAX_KERNEL_LOG_LEN,
-			__func__, LINE_NUM_KERNEL_LOG_LEN, __LINE__);
-
-		/*
-		 ** Calibration has completed, no need for more
-		 **  calibration interrupts. These events are one-shots.
-		 **  next calibration start will re-enable.
-		 */
-		ams_i2c_modify(chip->client, chip->shadow, TMD2755_REG_INTENAB, TMD2755_CIEN, 0);
-		ams_i2c_modify(chip->client, chip->shadow, TMD2755_REG_CALIB,   TMD2755_MASK_START_OFFSET_CALIB, 0);
-		ams_i2c_read(chip->client,  TMD2755_REG_CALIB_OFF, &chip->shadow[TMD2755_REG_CALIB_OFF]);
-		complete_all(&(chip->calibration_done));
-	} else if (status & TMD2755_INT_ST_CALIB_IRQ)
-		dev_info(dev, "%*.*s():%*d --> CINT Occurred While NOT in Calibration\n",  MIN_KERNEL_LOG_LEN, MAX_KERNEL_LOG_LEN,
-			__func__, LINE_NUM_KERNEL_LOG_LEN, __LINE__);	
-
-	AMS_MUTEX_UNLOCK(&chip->lock);
-	AMS_MUTEX_UNLOCK(&g_alsps_lock);
-	__pm_relax(g_tmd2755_wake_lock);
-	enable_irq(ALSPS_SENSOR_IRQ);
-}
 
 static int tmd2755_ALSPS_hw_get_interrupt()
 {
@@ -389,10 +266,6 @@ static int tmd2755_ALSPS_hw_get_interrupt()
 	AMS_MUTEX_LOCK(&chip->lock);
 	ret = ams_i2c_read(chip->client, TMD2755_REG_STATUS, &chip->shadow[TMD2755_REG_STATUS]);
 	status = chip->shadow[TMD2755_REG_STATUS];
-
-	if((status & 0x80) == 0){
-		log("Enter 0x94=0x%x", status);
-	}
 
 	if((status & 0x28) == 0x28){
 		status = status & 0xdf;
@@ -541,24 +414,31 @@ static int tmd2755_ALSPS_hw_get_interrupt()
 	return 1;  /* handled the interrupt */
 }
 
-#ifdef CONFIG_TMD2755_FLAG
+static void tmd2755_ist(struct work_struct *work){
+	struct tmd2755_chip *chip = g_tmd2755_chip;
+	if (chip->in_suspend) {
+		schedule_delayed_work(&tmd2755_ist_work, msecs_to_jiffies(5));
+	}else{
+		tmd2755_ALSPS_hw_get_interrupt();
+		__pm_relax(g_tmd2755_wake_lock);
+		enable_irq(ALSPS_SENSOR_IRQ);
+	}
+}
+
 static irqreturn_t tmd2755_irq(int irq, void *handle)
 {
 	struct tmd2755_chip *chip = handle;
 	struct device *dev = &chip->client->dev;
-	//int ret;
 	dbg("[IRQ] Disable irq !! \n");
 	disable_irq_nosync(ALSPS_SENSOR_IRQ);
 
 	if (chip->in_suspend) {
 		dev_info(dev, "%*.*s():%*d --> in suspend\n", MIN_KERNEL_LOG_LEN, MAX_KERNEL_LOG_LEN, __func__, LINE_NUM_KERNEL_LOG_LEN, __LINE__);
 		chip->irq_pending = 1;
-		//ret = 0;
-		schedule_work(&tmd2755_ist_work);
 		__pm_stay_awake(g_tmd2755_wake_lock);
+		schedule_delayed_work(&tmd2755_ist_work, msecs_to_jiffies(5));
 	}else{
 		__pm_stay_awake(g_tmd2755_wake_lock);
-		//ret = tmd2755_ALSPS_hw_get_interrupt();
 		tmd2755_ALSPS_hw_get_interrupt();
 		__pm_relax(g_tmd2755_wake_lock);
 		enable_irq(ALSPS_SENSOR_IRQ);
@@ -569,7 +449,6 @@ bypass:
 */
 	return IRQ_HANDLED;
 }
-#endif
 
 static int tmd2755_flush_regs(struct tmd2755_chip *chip)
 {
@@ -806,8 +685,6 @@ static int tmd2755_proximity_hw_turn_onoff(bool bOn)
 {
 	struct tmd2755_chip *chip = g_tmd2755_chip;
 	int rc = 0;
-	
-	log("%s():%d --> -------------------------------------------------", __func__, __LINE__);
 
 	AMS_MUTEX_LOCK(&chip->lock);
 	if(bOn){
@@ -821,11 +698,8 @@ static int tmd2755_proximity_hw_turn_onoff(bool bOn)
 				goto power_on_err;
 		}
 		rc = tmd2755_configure_prox_mode(chip, TMD2755_FEATURE_ON);
-		
 	}else{
-
 		tmd2755_configure_prox_mode(chip, TMD2755_FEATURE_OFF);
-
 		AMS_MUTEX_UNLOCK(&chip->lock);
 	}
 power_on_err:
@@ -1188,11 +1062,6 @@ int tmd2755_ATTR_register(void)
 }
 
 //===================================================================
-
-
-
-
-#ifdef CONFIG_TMD2755_FLAG
 static void set_pinctrl(struct i2c_client *client)
 {
 	int ret;
@@ -1274,7 +1143,6 @@ int tmd2755_gpio_register(struct i2c_client *client)
 
 }
 EXPORT_SYMBOL(tmd2755_gpio_register);
-#endif
 
 static struct regulator *reg;
 static int enable_3v_count = 0;
@@ -1373,22 +1241,13 @@ static int tmd2755_ALSPS_hw_check_ID(void)
 	return tmd2755_check_ID(g_tmd2755_chip);;
 }
 
-
-static int tmd2755_probe(struct i2c_client *client);
-static int tmd2755_ALSPS_hw_init(struct i2c_client *client){
-	return tmd2755_probe(client);
-}
-
-static int tmd2755_probe(struct i2c_client *client)
+static int tmd2755_ALSPS_hw_init(struct i2c_client *client)
 {
 	int ret;
 	struct device *dev = &client->dev;
 	struct tmd2755_i2c_platform_data *pdata = dev->platform_data;
 	static struct tmd2755_chip *chip;
 	bool powered = 0;
-#ifdef CONFIG_TMD2755_FLAG
-	//unsigned long default_irq_trigger = 0;
-#endif
 	g_i2c_client = client;
 
 	dev_info(dev, "%*.*s():%*d --> Device <%s> with irq=%d being probed.\n",
@@ -1581,28 +1440,10 @@ bypass_als_feature:
 	/****************************/
 	/* Initialize IRQ & Handler */
 	/****************************/
-	
-#ifdef CONFIG_TMD2755_FLAG
-	/*
-	ALSPS_SENSOR_IRQ = tmd2755_gpio_register(client);
-	if (ALSPS_SENSOR_IRQ < 0){
-		dev_err(dev, "%s: gpio register fail, %d", __func__, ALSPS_SENSOR_IRQ);
-		goto irq_register_fail;
-	}
-	default_irq_trigger = irqd_get_trigger_type(irq_get_irq_data(client->irq));
-	ret = devm_request_threaded_irq(dev, client->irq, NULL, &tmd2755_irq, default_irq_trigger | IRQF_SHARED | IRQF_ONESHOT,
-					dev_name(dev), chip);
-	if (ret) {
-		dev_err(dev, "Failed to request irq %d\n", client->irq);
-		goto irq_register_fail;
-	}
-	*/
-#endif
-
 	g_tmd2755_chip = chip;
 
 	g_tmd2755_wake_lock = wakeup_source_register(NULL, "tmd2755_wake_lock");
-	INIT_WORK(&tmd2755_ist_work, tmd2755_ist);
+	INIT_DELAYED_WORK(&tmd2755_ist_work, tmd2755_ist);
 
 	/* Power up device */
 	ams_i2c_write(chip->client, chip->shadow, TMD2755_REG_ENABLE, 0x01);
@@ -1659,92 +1500,7 @@ init_failed:
 		MIN_KERNEL_LOG_LEN, MAX_KERNEL_LOG_LEN, __func__, LINE_NUM_KERNEL_LOG_LEN, __LINE__);
 	return ret;
 }
-/*
-static int tmd2755_remove(struct i2c_client *client)
-{
-	struct tmd2755_chip *chip = i2c_get_clientdata(client);
 
-	dev_info(&client->dev, "%*.*s():%*d --> Enter\n", MIN_KERNEL_LOG_LEN, MAX_KERNEL_LOG_LEN, __func__,
-		LINE_NUM_KERNEL_LOG_LEN, __LINE__);
-
-	// not currently used 
-	if (chip->gpiod_interrupt)
-		devm_free_irq(&client->dev, client->irq, chip);
-	
-#ifndef REMOVE_INPUT_DEVICE
-
-	if (chip->prox_idev) {
-		tmd2755_remove_sysfs_interfaces(&chip->prox_idev->dev, tmd2755_prox_attrs, tmd2755_prox_attrs_size);
-		input_unregister_device(chip->prox_idev);
-	}
-
-	if (chip->als_idev) {
-		tmd2755_remove_sysfs_interfaces(&chip->als_idev->dev, tmd2755_als_attrs, tmd2755_als_attrs_size);
-		input_unregister_device(chip->als_idev);
-	}
-#ifdef DEBUG_ABI_SET_GET_REGISTERS
-	if (chip->dbg_idev) {
-		tmd2755_remove_sysfs_interfaces(&chip->dbg_idev->dev, tmd2755_dbg_attrs, tmd2755_dbg_attrs_size);
-		input_unregister_device(chip->dbg_idev);
-	}
-#endif
-#endif
-	if (chip->pdata->platform_teardown)
-		chip->pdata->platform_teardown(&client->dev);
-
-	i2c_set_clientdata(client, NULL);
-
-	return 0;
-}
-
-
-static int tmd2755_suspend(struct device *dev)
-{
-	struct tmd2755_chip *chip = g_tmd2755_chip;
-
-	dev_info(dev, "%*.*s():%*d --> Enter\n",
-		MIN_KERNEL_LOG_LEN, MAX_KERNEL_LOG_LEN, __func__, LINE_NUM_KERNEL_LOG_LEN, __LINE__);
-
-	AMS_MUTEX_LOCK(&chip->lock);
-	chip->in_suspend = 1;
-
-	if (chip->wake_irq) {
-		irq_set_irq_wake(chip->client->irq, 1);
-	} else if (!chip->unpowered) {
-		dev_info(dev, "%*.*s():%*d --> powering OFF\n",
-			MIN_KERNEL_LOG_LEN, MAX_KERNEL_LOG_LEN, __func__, LINE_NUM_KERNEL_LOG_LEN, __LINE__);
-		tmd2755_pltf_power_off(chip);
-	}
-	AMS_MUTEX_UNLOCK(&chip->lock);
-
-	return 0;
-}
-
-static int tmd2755_resume(struct device *dev)
-{
-	struct tmd2755_chip *chip = g_tmd2755_chip;
-	bool als_on, prox_on;
-
-
-	AMS_MUTEX_LOCK(&chip->lock);
-	chip->in_suspend = 0;
-
-	dev_info(dev, "%*.*s():%*d --> powered %d, als: needed %d  enabled %d\n",
-		MIN_KERNEL_LOG_LEN, MAX_KERNEL_LOG_LEN, __func__, LINE_NUM_KERNEL_LOG_LEN, __LINE__, !chip->unpowered, als_on, chip->als_enable);
-
-	dev_info(dev, "%*.*s():%*d --> prox: needed %d  enabled %d\n",
-		MIN_KERNEL_LOG_LEN, MAX_KERNEL_LOG_LEN, __func__, LINE_NUM_KERNEL_LOG_LEN, __LINE__, prox_on, chip->prox_enable);
-
-	if (chip->wake_irq) {
-		irq_set_irq_wake(chip->client->irq, 0);
-		chip->wake_irq = 0;
-	}
-	AMS_MUTEX_UNLOCK(&chip->lock);
-
-	return 0;
-}
-*/
-	
 void tmd2755_suspend(void){
 	struct tmd2755_chip *chip = g_tmd2755_chip;
 	AMS_MUTEX_LOCK(&chip->lock);
@@ -1893,26 +1649,20 @@ static int tmd2755_proximity_hw_set_offset_limit(int en, int thresh)
 	}else{
 		g_tmd2755_chip->params.poffset_limit = PROX_OFFSET_MAX;
 	}
+
 	if(g_tmd2755_chip->params.poffset_limit > PROX_OFFSET_MAX){
 		g_tmd2755_chip->params.poffset_limit = PROX_OFFSET_MAX;
 	}
+
 	log("en=%d, thresh=%d, poffset_limit update to %d", en, thresh, g_tmd2755_chip->params.poffset_limit);
 	return 0;
 }
 
-
-#ifdef CONFIG_TMD2755_FLAG
 static ssize_t tmd2755_ALSPS_hw_show_allreg(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	return tmd2755_registers_get(g_tmd2755_chip, buf, PAGE_SIZE);
 }
-#else
-static int tmd2755_ALSPS_hw_show_allreg(void)
-{
-	/*Do nothing*/
-	return 0;
-}
-#endif
+
 static int tmd2755_ALSPS_hw_get_register(uint8_t reg)
 {
 	int ret = 0;
@@ -1969,89 +1719,13 @@ static int tmd2755_light_hw_get_adc(void)
 	return g_tmd2755_chip->als_info.lux;
 }
 
-static int tmd2755_light_hw_get_lux(void)
-{
-	return g_tmd2755_chip->als_info.lux;
-}
-
 static int tmd2755_light_hw_set_hi_threshold(int hi_threshold)
 {
-#ifndef CONFIG_TMD2755_FLAG
-	unsigned long hi_thresh;
-	struct tmd2755_chip *chip = g_tmd2755_chip;
-	hi_thresh = (unsigned long)hi_threshold;
-	/*
-	u8 *sh = chip->shadow;
-	u16 cur_low_threshold = sh[TMD2755_REG_AILTL] | (sh[TMD2755_REG_AILTH]<<8);
-	u16 cur_hi_threshold = sh[TMD2755_REG_AIHTL] | (sh[TMD2755_REG_AIHTH]<<8);
-
-	dbg("new_h=%x, cur_h=%x, cur_l=%x, raw=%x", 
-		hi_thresh, cur_hi_threshold, cur_low_threshold, chip->als_info.ch0_raw);
-	
-	dbg("LTL:%x, LTH:%x, HTL:%x, HTH:%x", 
-		sh[TMD2755_REG_AILTL], sh[TMD2755_REG_AILTH],
-		sh[TMD2755_REG_AIHTL], sh[TMD2755_REG_AIHTH]);
-	if(chip->als_info.ch0_raw < cur_low_threshold || chip->als_info.ch0_raw > cur_hi_threshold){
-		dbg("HTL:%x, HTH:%x", sh[TMD2755_REG_AIHTL], sh[TMD2755_REG_AIHTH]);
-	*/
-		chip->shadow[TMD2755_REG_AIHTL] = (u8)(hi_threshold & 0xff);
-		chip->shadow[TMD2755_REG_AIHTH] = (u8)(hi_threshold >> 8);
-
-		ams_i2c_write(chip->client, chip->shadow, TMD2755_REG_AIHTL, (u8)(hi_threshold & 0xff));
-		ams_i2c_write(chip->client, chip->shadow, TMD2755_REG_AIHTH, (u8)(hi_threshold >> 8));
-
-/*
-		log("LTL:0x%x, LTH:0x%x, HTL:0x%x, HTH:0x%x", 
-			chip->shadow[TMD2755_REG_AILTL], chip->shadow[TMD2755_REG_AILTH], 
-			chip->shadow[TMD2755_REG_AIHTL], chip->shadow[TMD2755_REG_AIHTH]);
-
-		ams_i2c_reg_blk_write(chip->client, TMD2755_REG_AIHTL, &chip->shadow[TMD2755_REG_AIHTL],
-			(TMD2755_REG_AIHTH - TMD2755_REG_AIHTL) + 1);
-*/
-/*
-	}else{
-		log("do nothing");
-	}
-*/
-#endif
 	return 0;
 }
 
 static int tmd2755_light_hw_set_lo_threshold(int low_threshold)
 {
-#ifndef CONFIG_TMD2755_FLAG
-	unsigned long low_thresh;
-	struct tmd2755_chip *chip = g_tmd2755_chip;
-	low_thresh = (unsigned long)low_threshold;
-	/*
-	u8 *sh = chip->shadow;
-	u16 cur_low_threshold = sh[TMD2755_REG_AILTL] | (sh[TMD2755_REG_AILTH]<<8);
-	u16 cur_hi_threshold = sh[TMD2755_REG_AIHTL] | (sh[TMD2755_REG_AIHTH]<<8);
-	dbg("new_l=%x, cur_h=%x, cur_l=%x, raw=%x", 
-		low_thresh, cur_hi_threshold, cur_low_threshold, chip->als_info.ch0_raw);
-	dbg("LTL:%x, LTH:%x, HTL:%x, HTH:%x", 
-		sh[TMD2755_REG_AILTL], sh[TMD2755_REG_AILTH],
-		sh[TMD2755_REG_AIHTL], sh[TMD2755_REG_AIHTH]);
-	if(chip->als_info.ch0_raw < cur_low_threshold || chip->als_info.ch0_raw > cur_hi_threshold){
-		dbg("LTL:%x, LTH:%x", sh[TMD2755_REG_AILTL], sh[TMD2755_REG_AILTH]);
-	*/
-
-		chip->shadow[TMD2755_REG_AILTL] = (u8)(low_threshold & 0xff);
-		chip->shadow[TMD2755_REG_AILTH] = (u8)(low_threshold >> 8);
-
-		ams_i2c_write(chip->client, chip->shadow, TMD2755_REG_AILTL, (u8)(low_threshold & 0xff));
-		ams_i2c_write(chip->client, chip->shadow, TMD2755_REG_AILTH, (u8)(low_threshold >> 8));
-		/*
-		*((__le16 *) &chip->shadow[TMD2755_REG_AILTL]) = cpu_to_le16(low_threshold);
-		ams_i2c_reg_blk_write(chip->client, TMD2755_REG_AILTL, &chip->shadow[TMD2755_REG_AILTL],
-			(TMD2755_REG_AILTH - TMD2755_REG_AILTL) + 1);
-		*/
-/*
-	}else{
-		log("do nothing");
-	}
-*/
-#endif
 	return 0;
 }
 
@@ -2141,12 +1815,10 @@ static struct psensor_hw psensor_hw_tmd2755 = {
 	.proximity_hw_set_lo_threshold = tmd2755_proximity_hw_set_lo_threshold,
 	.proximity_hw_set_autoK = tmd2755_proximity_hw_set_autoK,
 	.proximity_hw_set_period = tmd2755_proximity_hw_set_period,
-#ifdef CONFIG_TMD2755_FLAG
 	.proximity_hw_chip_cal_en = tmd2755_proximity_hw_chip_cal_en,
 	.proximity_hw_get_offset = tmd2755_proximity_hw_get_offset,
 	.proximity_hw_set_fac_offset = tmd2755_proximity_hw_set_fac_offset,
 	.proximity_hw_set_offset_limit = tmd2755_proximity_hw_set_offset_limit,
-#endif
 };
 
 static struct lsensor_hw lsensor_hw_tmd2755 = {
@@ -2156,7 +1828,6 @@ static struct lsensor_hw lsensor_hw_tmd2755 = {
 	.light_hw_turn_onoff = tmd2755_light_hw_turn_onoff,
 	.light_hw_interrupt_onoff = tmd2755_light_hw_interrupt_onoff,
 	.light_hw_get_adc = tmd2755_light_hw_get_adc,
-	.light_hw_get_lux = tmd2755_light_hw_get_lux,
 	.light_hw_set_hi_threshold = tmd2755_light_hw_set_hi_threshold,
 	.light_hw_set_lo_threshold = tmd2755_light_hw_set_lo_threshold,
 	.light_hw_set_integration = tmd2755_light_hw_set_integration,

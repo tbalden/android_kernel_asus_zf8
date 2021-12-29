@@ -192,7 +192,6 @@ int ALSPS_i2c_add_driver_2nd(void)
 		err("g_ALSPS_I2C is NULL. Please use 'ALSPS_i2c_register' first. \n");
 		return -1;
 	}
-
 	/* i2c Registration */
 	for (ALSPS_sensor_source = 0; ALSPS_sensor_source < ALSPS_hw_source_max; 
 			ALSPS_sensor_source++) {

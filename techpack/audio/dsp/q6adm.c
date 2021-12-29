@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2021, The Linux Foundation. All rights reserved.
  */
 #include <linux/module.h>
 #include <linux/slab.h>
@@ -109,6 +109,7 @@ struct adm_ctl {
 	uint32_t copp_token;
 	int tx_port_id;
 	bool hyp_assigned;
+	int fnn_app_type;
 };
 
 static struct adm_ctl			this_adm;
@@ -2313,7 +2314,7 @@ static void send_adm_cal_type(int cal_index, int path, int port_id,
 			      int acdb_id, int sample_rate)
 {
 	struct cal_block_data		*cal_block = NULL;
-	int ret;
+	int ret, port_idx, topology;
 	int dest_perms[2] = {PERM_READ | PERM_WRITE, PERM_READ | PERM_WRITE};
 	int source_vm[1] = {VMID_HLOS};
 	int dest_vm[2] = {VMID_LPASS, VMID_ADSP_HEAP};
@@ -2326,13 +2327,21 @@ static void send_adm_cal_type(int cal_index, int path, int port_id,
 		goto done;
 	}
 
+	port_idx = adm_validate_and_get_port_index(port_id);
+	if (port_idx < 0) {
+		pr_err("%s: Invalid port id: 0x%x", __func__, port_id);
+		goto done;
+	}
+
 	mutex_lock(&this_adm.cal_data[cal_index]->lock);
 	cal_block = adm_find_cal(cal_index, path, app_type, acdb_id,
 				sample_rate);
 	if (cal_block == NULL)
 		goto unlock;
 
-	if (cal_block->cma_mem) {
+	topology = atomic_read(&this_adm.copp.topology[port_idx][copp_idx]);
+	if (cal_block->cma_mem &&
+	    topology == VPM_TX_VOICE_FLUENCE_NN_COPP_TOPOLOGY) {
 		if (cal_block->cal_data.paddr == 0 ||
 		    cal_block->map_data.map_size <= 0) {
 			pr_err("%s: No address to map!\n", __func__);
@@ -2351,6 +2360,7 @@ static void send_adm_cal_type(int cal_index, int path, int port_id,
 		}
 		this_adm.tx_port_id = port_id;
 		this_adm.hyp_assigned = true;
+		this_adm.fnn_app_type = app_type;
 		pr_debug("%s: hyp_assign_phys success in tx_port_id 0x%x\n",
 			 __func__, this_adm.tx_port_id);
 	}
@@ -2685,8 +2695,8 @@ static int adm_arrange_mch_map_v8(
 		} else if (channel_mode == 6) {
 			ep_payload->dev_channel_mapping[0] = PCM_CHANNEL_FL;
 			ep_payload->dev_channel_mapping[1] = PCM_CHANNEL_FR;
-			ep_payload->dev_channel_mapping[2] = PCM_CHANNEL_LFE;
-			ep_payload->dev_channel_mapping[3] = PCM_CHANNEL_FC;
+			ep_payload->dev_channel_mapping[2] = PCM_CHANNEL_FC;
+			ep_payload->dev_channel_mapping[3] = PCM_CHANNEL_LFE;
 			ep_payload->dev_channel_mapping[4] = PCM_CHANNEL_LS;
 			ep_payload->dev_channel_mapping[5] = PCM_CHANNEL_RS;
 		} else if (channel_mode == 7) {
@@ -2694,18 +2704,18 @@ static int adm_arrange_mch_map_v8(
 			ep_payload->dev_channel_mapping[1] = PCM_CHANNEL_FR;
 			ep_payload->dev_channel_mapping[2] = PCM_CHANNEL_FC;
 			ep_payload->dev_channel_mapping[3] = PCM_CHANNEL_LFE;
-			ep_payload->dev_channel_mapping[4] = PCM_CHANNEL_LB;
-			ep_payload->dev_channel_mapping[5] = PCM_CHANNEL_RB;
+			ep_payload->dev_channel_mapping[4] = PCM_CHANNEL_LS;
+			ep_payload->dev_channel_mapping[5] = PCM_CHANNEL_RS;
 			ep_payload->dev_channel_mapping[6] = PCM_CHANNEL_CS;
 		} else if (channel_mode == 8) {
 			ep_payload->dev_channel_mapping[0] = PCM_CHANNEL_FL;
 			ep_payload->dev_channel_mapping[1] = PCM_CHANNEL_FR;
-			ep_payload->dev_channel_mapping[2] = PCM_CHANNEL_LFE;
-			ep_payload->dev_channel_mapping[3] = PCM_CHANNEL_FC;
-			ep_payload->dev_channel_mapping[4] = PCM_CHANNEL_LS;
-			ep_payload->dev_channel_mapping[5] = PCM_CHANNEL_RS;
-			ep_payload->dev_channel_mapping[6] = PCM_CHANNEL_LB;
-			ep_payload->dev_channel_mapping[7] = PCM_CHANNEL_RB;
+			ep_payload->dev_channel_mapping[2] = PCM_CHANNEL_FC;
+			ep_payload->dev_channel_mapping[3] = PCM_CHANNEL_LFE;
+			ep_payload->dev_channel_mapping[4] = PCM_CHANNEL_LB;
+			ep_payload->dev_channel_mapping[5] = PCM_CHANNEL_RB;
+			ep_payload->dev_channel_mapping[6] = PCM_CHANNEL_LS;
+			ep_payload->dev_channel_mapping[7] = PCM_CHANNEL_RS;
 		} else if (channel_mode == 10) {
 			ep_payload->dev_channel_mapping[0] = PCM_CHANNEL_FL;
 			ep_payload->dev_channel_mapping[1] = PCM_CHANNEL_FR;
@@ -2720,8 +2730,8 @@ static int adm_arrange_mch_map_v8(
 		} else if (channel_mode == 12) {
 			ep_payload->dev_channel_mapping[0] = PCM_CHANNEL_FL;
 			ep_payload->dev_channel_mapping[1] = PCM_CHANNEL_FR;
-			ep_payload->dev_channel_mapping[2] = PCM_CHANNEL_LFE;
-			ep_payload->dev_channel_mapping[3] = PCM_CHANNEL_FC;
+			ep_payload->dev_channel_mapping[2] = PCM_CHANNEL_FC;
+			ep_payload->dev_channel_mapping[3] = PCM_CHANNEL_LFE;
 			ep_payload->dev_channel_mapping[4] = PCM_CHANNEL_LB;
 			ep_payload->dev_channel_mapping[5] = PCM_CHANNEL_RB;
 			ep_payload->dev_channel_mapping[6] = PCM_CHANNEL_LS;
@@ -2748,8 +2758,8 @@ static int adm_arrange_mch_map_v8(
 		} else if (channel_mode == 16) {
 			ep_payload->dev_channel_mapping[0] = PCM_CHANNEL_FL;
 			ep_payload->dev_channel_mapping[1] = PCM_CHANNEL_FR;
-			ep_payload->dev_channel_mapping[2] = PCM_CHANNEL_LFE;
-			ep_payload->dev_channel_mapping[3] = PCM_CHANNEL_FC;
+			ep_payload->dev_channel_mapping[2] = PCM_CHANNEL_FC;
+			ep_payload->dev_channel_mapping[3] = PCM_CHANNEL_LFE;
 			ep_payload->dev_channel_mapping[4] = PCM_CHANNEL_LB;
 			ep_payload->dev_channel_mapping[5] = PCM_CHANNEL_RB;
 			ep_payload->dev_channel_mapping[6] = PCM_CHANNEL_LS;
@@ -3143,6 +3153,7 @@ int adm_open(int port_id, int path, int rate, int channel_mode, int topology,
 
 	if (topology == VPM_TX_VOICE_SMECNS_V2_COPP_TOPOLOGY ||
 	    topology == VPM_TX_VOICE_FLUENCE_SM_COPP_TOPOLOGY ||
+	    topology == VPM_TX_VOICE_FLUENCE_NN_COPP_TOPOLOGY ||
 	    topology == AUDIO_RX_MONO_VOIP_COPP_TOPOLOGY)
 		channel_mode = 1;
 
@@ -3876,7 +3887,7 @@ int adm_close(int port_id, int perf_mode, int copp_idx)
 {
 	struct apr_hdr close;
 
-	int ret = 0, port_idx;
+	int ret = 0, port_idx, app_type, topology;
 	int copp_id = RESET_COPP_ID;
 	bool result = false;
 	int dest_perms[1] = {PERM_READ | PERM_WRITE | PERM_EXEC};
@@ -3902,6 +3913,8 @@ int adm_close(int port_id, int perf_mode, int copp_idx)
 	}
 
 	port_channel_map[port_idx].set_channel_map = false;
+	topology = atomic_read(&this_adm.copp.topology[port_idx][copp_idx]);
+	app_type = atomic_read(&this_adm.copp.app_type[port_idx][copp_idx]);
 	if (this_adm.copp.adm_delay[port_idx][copp_idx] && perf_mode
 		== LEGACY_PCM_MODE) {
 		atomic_set(&this_adm.copp.adm_delay_stat[port_idx][copp_idx],
@@ -3983,7 +3996,9 @@ int adm_close(int port_id, int perf_mode, int copp_idx)
 		ret = apr_send_pkt(this_adm.apr, (uint32_t *)&close);
 		if (ret < 0) {
 			pr_err("%s: ADM close failed %d\n", __func__, ret);
-			if (this_adm.tx_port_id == port_id) {
+			if (this_adm.tx_port_id == port_id &&
+			    this_adm.fnn_app_type == app_type &&
+			    topology == VPM_TX_VOICE_FLUENCE_NN_COPP_TOPOLOGY) {
 				mutex_lock(&this_adm.cal_data[cal_index]->lock);
 				cal_block = cal_utils_get_only_cal_block(
 						this_adm.cal_data[cal_index]);
@@ -4006,17 +4021,17 @@ int adm_close(int port_id, int perf_mode, int copp_idx)
 							goto fail;
 						}
 						/**
-						* call unmap CMA before hyp unassign during
-						* end of handset/speaker usecase.
-						*/
+						 *  call unmap CMA before hyp unassign during
+						 *  end of handset/speaker usecase.
+						 */
 						if (cal_block->map_data.q6map_handle != 0) {
 							atomic_set(&this_adm.mem_map_handles[cal_index],
-							cal_block->map_data.q6map_handle);
+									cal_block->map_data.q6map_handle);
 							atomic_set(&this_adm.mem_map_index, cal_index);
 							ret = adm_memory_unmap_regions();
 							if (ret < 0)
 								pr_err("%s: unmap did not work! cal_type %i ret %d\n",
-								__func__, cal_index, ret);
+										__func__, cal_index, ret);
 							cal_block->map_data.q6map_handle = 0;
 						}
 						ret = hyp_assign_phys(
@@ -4068,7 +4083,9 @@ int adm_close(int port_id, int perf_mode, int copp_idx)
 		rtac_remove_adm_device(port_id, copp_id);
 	}
 
-	if (this_adm.tx_port_id == port_id) {
+	if (this_adm.tx_port_id == port_id &&
+	    this_adm.fnn_app_type == app_type &&
+	    topology == VPM_TX_VOICE_FLUENCE_NN_COPP_TOPOLOGY) {
 		mutex_lock(&this_adm.cal_data[cal_index]->lock);
 		cal_block = cal_utils_get_only_cal_block(
 				this_adm.cal_data[cal_index]);
@@ -4093,12 +4110,12 @@ int adm_close(int port_id, int perf_mode, int copp_idx)
 				/* call unmap CMA before hyp unassign during end of handset/speaker usecase */
 				if (cal_block->map_data.q6map_handle != 0) {
 					atomic_set(&this_adm.mem_map_handles[cal_index],
-					cal_block->map_data.q6map_handle);
+							cal_block->map_data.q6map_handle);
 					atomic_set(&this_adm.mem_map_index, cal_index);
 					ret = adm_memory_unmap_regions();
 					if (ret < 0)
 						pr_err("%s: unmap did not work! cal_type %i ret %d\n",
-						__func__, cal_index, ret);
+								__func__, cal_index, ret);
 					cal_block->map_data.q6map_handle = 0;
 				}
 				ret = hyp_assign_phys(cal_block->cal_data.paddr,
@@ -5686,6 +5703,7 @@ int __init adm_init(void)
 	this_adm.ffecns_port_id = -1;
 	this_adm.tx_port_id = -1;
 	this_adm.hyp_assigned = false;
+	this_adm.fnn_app_type = -1;
 	init_waitqueue_head(&this_adm.matrix_map_wait);
 	init_waitqueue_head(&this_adm.adm_wait);
 

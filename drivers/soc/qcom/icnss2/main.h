@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2020, 2021, The Linux Foundation.
+ * All rights reserved.
  */
 
 #ifndef __MAIN_H__
@@ -24,6 +25,8 @@
 #define THERMAL_NAME_LENGTH 20
 #define ICNSS_SMEM_VALUE_MASK 0xFFFFFFFF
 #define ICNSS_SMEM_SEQ_NO_POS 16
+#define QCA6750_PATH_PREFIX    "qca6750/"
+#define ICNSS_MAX_FILE_NAME      35
 
 extern uint64_t dynamic_feature_mask;
 
@@ -54,6 +57,8 @@ enum icnss_driver_event_type {
 	ICNSS_DRIVER_EVENT_QDSS_TRACE_REQ_MEM,
 	ICNSS_DRIVER_EVENT_QDSS_TRACE_SAVE,
 	ICNSS_DRIVER_EVENT_QDSS_TRACE_FREE,
+	ICNSS_DRIVER_EVENT_M3_DUMP_UPLOAD_REQ,
+	ICNSS_DRIVER_EVENT_QDSS_TRACE_REQ_DATA,
 	ICNSS_DRIVER_EVENT_MAX,
 };
 
@@ -128,6 +133,7 @@ struct icnss_vreg_cfg {
 	u32 delay_us;
 	u32 need_unvote;
 	bool required;
+	bool is_supported;
 };
 
 struct icnss_vreg_info {
@@ -171,10 +177,12 @@ struct icnss_fw_mem {
 	unsigned long attrs;
 };
 
-enum icnss_power_save_mode {
+enum icnss_smp2p_msg_id {
 	ICNSS_POWER_SAVE_ENTER = 1,
 	ICNSS_POWER_SAVE_EXIT,
+	ICNSS_TRIGGER_SSR,
 };
+
 struct icnss_stats {
 	struct {
 		uint32_t posted;
@@ -332,6 +340,7 @@ struct icnss_priv {
 	u32 msi_base_data;
 	struct icnss_control_params ctrl_params;
 	u8 cal_done;
+	u8 use_prefix_path;
 	u32 ce_irqs[ICNSS_MAX_IRQ_REGISTRATIONS];
 	u32 srng_irqs[IWCN_MAX_IRQ_REGISTRATIONS];
 	phys_addr_t mem_base_pa;
@@ -379,13 +388,20 @@ struct icnss_priv {
 	int total_domains;
 	struct notifier_block get_service_nb;
 	void *modem_notify_handler;
+	void *wpss_notify_handler;
 	struct notifier_block modem_ssr_nb;
+	struct notifier_block wpss_ssr_nb;
 	uint32_t diag_reg_read_addr;
 	uint32_t diag_reg_read_mem_type;
 	uint32_t diag_reg_read_len;
 	uint8_t *diag_reg_read_buf;
 	atomic_t pm_count;
 	struct ramdump_device *msa0_dump_dev;
+	struct ramdump_device *m3_dump_dev_seg1;
+	struct ramdump_device *m3_dump_dev_seg2;
+	struct ramdump_device *m3_dump_dev_seg3;
+	struct ramdump_device *m3_dump_dev_seg4;
+	struct ramdump_device *m3_dump_dev_seg5;
 	bool force_err_fatal;
 	bool allow_recursive_recovery;
 	bool early_crash_ind;
@@ -406,6 +422,7 @@ struct icnss_priv {
 	bool is_ssr;
 	bool smmu_s1_enable;
 	struct kobject *icnss_kobject;
+	void *subsys;
 	atomic_t is_shutdown;
 	u32 qdss_mem_seg_len;
 	struct icnss_fw_mem qdss_mem[QMI_WLFW_MAX_NUM_MEM_SEG];
@@ -418,6 +435,9 @@ struct icnss_priv {
 	void *hang_event_data;
 	struct list_head icnss_tcdev_list;
 	struct mutex tcdev_lock;
+	bool is_chain1_supported;
+	bool chain_reg_info_updated;
+	u32 hw_trc_override;
 };
 
 struct icnss_reg_info {
@@ -426,6 +446,7 @@ struct icnss_reg_info {
 	uint32_t data_len;
 };
 
+void icnss_free_qdss_mem(struct icnss_priv *priv);
 char *icnss_driver_event_to_str(enum icnss_driver_event_type type);
 int icnss_call_driver_uevent(struct icnss_priv *priv,
 				    enum icnss_uevent uevent, void *data);
@@ -442,5 +463,7 @@ int icnss_get_iova(struct icnss_priv *priv, u64 *addr, u64 *size);
 int icnss_get_iova_ipa(struct icnss_priv *priv, u64 *addr, u64 *size);
 int icnss_get_cpr_info(struct icnss_priv *priv);
 int icnss_update_cpr_info(struct icnss_priv *priv);
+void icnss_add_fw_prefix_name(struct icnss_priv *priv, char *prefix_name,
+			      char *name);
 #endif
 

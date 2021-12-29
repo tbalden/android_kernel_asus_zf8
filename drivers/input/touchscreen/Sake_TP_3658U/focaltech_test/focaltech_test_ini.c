@@ -96,7 +96,6 @@ struct ini_ic_type ic_types[] = {
 
     {"FT8736",  0x83000006},
 
-    {"FT8006M", 0x87000007},
     {"FT8201",  0x87010010},
     {"FT7250",  0x8702001A},
 
@@ -153,6 +152,8 @@ struct ini_ic_type ic_types[] = {
     {"FT5946",  0x590D0087},
 
     {"FT3658U", 0x5A010088},
+
+    {"FT2388",  0x9D00001E},
 };
 
 /*****************************************************************************
@@ -759,7 +760,7 @@ static void get_detail_threshold(char *key_name, bool is_prex, int *thr, int nod
                                    key_name, i, thr_pos, node_num);
                     break;
                 }
-                thr[thr_pos] = (short)(fts_atoi(str_tmp));
+                thr[thr_pos] = (int)(fts_atoi(str_tmp));
                 index = 0;
                 memset(str_tmp, 0x00, sizeof(str_tmp));
                 k++;
@@ -913,13 +914,15 @@ static void print_thr_incell(void)
     FTS_TEST_DBG("lcdnoise_frame:%d", thr->basic.lcdnoise_frame);
     FTS_TEST_DBG("lcdnoise_coefficient:%d", thr->basic.lcdnoise_coefficient);
     FTS_TEST_DBG("lcdnoise_coefficient_vkey:%d", thr->basic.lcdnoise_coefficient_vkey);
+    FTS_TEST_DBG("open_diff_min:%d", thr->basic.open_diff_min);
 
     FTS_TEST_DBG("open_nmos:%d", thr->basic.open_nmos);
     FTS_TEST_DBG("keyshort_k1:%d", thr->basic.keyshort_k1);
     FTS_TEST_DBG("keyshort_cb_max:%d", thr->basic.keyshort_cb_max);
     FTS_TEST_DBG("rawdata2_min:%d", thr->basic.rawdata2_min);
     FTS_TEST_DBG("rawdata2_max:%d", thr->basic.rawdata2_max);
-
+    FTS_TEST_DBG("mux_open_cb_min:%d", thr->basic.mux_open_cb_min);
+    FTS_TEST_DBG("open_delta_V:%d", thr->basic.open_delta_V);
 
     print_buffer(thr->rawdata_min, tdata->node.node_num, tdata->node.rx_num);
     print_buffer(thr->rawdata_max, tdata->node.node_num, tdata->node.rx_num);
@@ -1003,6 +1006,8 @@ static int get_test_threshold_mc_sc(void)
         fts_init_buffer(thr->rawdata_l_min, thr->basic.rawdata_l_min, node_num, false, 0, 0);
         fts_init_buffer(thr->rawdata_l_max, thr->basic.rawdata_l_max, node_num, false, 0, 0);
     }
+    fts_init_buffer(thr->noise_min, thr->basic.noise_min, node_num, false, 0, 0);
+    fts_init_buffer(thr->noise_max, thr->basic.noise_max, node_num, false, 0, 0);
     fts_init_buffer(thr->tx_linearity_max, thr->basic.uniformity_tx_hole, node_num, false, 0, 0);
     fts_init_buffer(thr->tx_linearity_min, 0, node_num, false, 0, 0);
     fts_init_buffer(thr->rx_linearity_max, thr->basic.uniformity_rx_hole, node_num, false, 0, 0);
@@ -1023,6 +1028,16 @@ static int get_test_threshold_mc_sc(void)
     fts_init_buffer(thr->scap_rawdata_hi_max, thr->basic.scap_rawdata_hi_max, sc_num, false, 0, 0);
     fts_init_buffer(thr->scap_rawdata_hov_min, thr->basic.scap_rawdata_hov_min, sc_num, false, 0, 0);
     fts_init_buffer(thr->scap_rawdata_hov_max, thr->basic.scap_rawdata_hov_max, sc_num, false, 0, 0);
+
+    fts_init_buffer(thr->scap_noise_off_min, thr->basic.scap_noise_off_min, sc_num, false, 0, 0);
+    fts_init_buffer(thr->scap_noise_off_max, thr->basic.scap_noise_off_max, sc_num, false, 0, 0);
+    fts_init_buffer(thr->scap_noise_on_min, thr->basic.scap_noise_on_min, sc_num, false, 0, 0);
+    fts_init_buffer(thr->scap_noise_on_max, thr->basic.scap_noise_on_max, sc_num, false, 0, 0);
+    fts_init_buffer(thr->scap_noise_hi_min, thr->basic.scap_noise_hi_min, sc_num, false, 0, 0);
+    fts_init_buffer(thr->scap_noise_hi_max, thr->basic.scap_noise_hi_max, sc_num, false, 0, 0);
+    fts_init_buffer(thr->scap_noise_hov_min, thr->basic.scap_noise_hov_min, sc_num, false, 0, 0);
+    fts_init_buffer(thr->scap_noise_hov_max, thr->basic.scap_noise_hov_max, sc_num, false, 0, 0);
+
     fts_init_buffer(thr->panel_differ_min, thr->basic.panel_differ_min, node_num, false, 0, 0);
     fts_init_buffer(thr->panel_differ_max, thr->basic.panel_differ_max, node_num, false, 0, 0);
 
@@ -1053,6 +1068,8 @@ static int get_test_threshold_mc_sc(void)
     get_detail_threshold("ScapRawData_Hov_Max_", true, thr->scap_rawdata_hov_max, sc_num);
     get_detail_threshold("Panel_Differ_Min_Tx", true, thr->panel_differ_min, node_num);
     get_detail_threshold("Panel_Differ_Max_Tx", true, thr->panel_differ_max, node_num);
+
+    get_detail_threshold("NoistTestCoefficient_Tx", true, thr->noise_max, node_num);
 
     return 0;
 }
@@ -1099,6 +1116,8 @@ static void print_thr_mc_sc(void)
     print_buffer(thr->rawdata_h_max, tdata->node.node_num, tdata->node.rx_num);
     print_buffer(thr->rawdata_l_min, tdata->node.node_num, tdata->node.rx_num);
     print_buffer(thr->rawdata_l_max, tdata->node.node_num, tdata->node.rx_num);
+    print_buffer(thr->tx_linearity_max, tdata->node.node_num, tdata->node.rx_num);
+    print_buffer(thr->rx_linearity_max, tdata->node.node_num, tdata->node.rx_num);
     print_buffer(thr->scap_cb_off_min, tdata->sc_node.node_num, tdata->sc_node.rx_num);
     print_buffer(thr->scap_cb_off_max, tdata->sc_node.node_num, tdata->sc_node.rx_num);
     print_buffer(thr->scap_cb_on_min, tdata->sc_node.node_num, tdata->sc_node.rx_num);
@@ -1117,6 +1136,7 @@ static void print_thr_mc_sc(void)
     print_buffer(thr->scap_rawdata_hov_max, tdata->sc_node.node_num, tdata->sc_node.rx_num);
     print_buffer(thr->panel_differ_min, tdata->node.node_num, tdata->node.rx_num);
     print_buffer(thr->panel_differ_max, tdata->node.node_num, tdata->node.rx_num);
+    print_buffer(thr->noise_max, tdata->node.node_num, tdata->node.rx_num);
 }
 
 static int ini_init_test_mc_sc(void)

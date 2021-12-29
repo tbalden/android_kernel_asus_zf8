@@ -31,6 +31,9 @@
 #include <dsp/q6audio-v2.h>
 #include <dsp/q6core.h>
 #include <dsp/q6asm-v2.h>
+#ifdef CONFIG_MSM_BOOT_TIME_MARKER
+#include <soc/qcom/boot_stats.h>
+#endif
 
 #include "msm-pcm-q6-v2.h"
 #include "msm-pcm-routing-v2.h"
@@ -265,12 +268,19 @@ static void event_handler(uint32_t opcode,
 				break;
 			}
 			if (prtd->mmap_flag) {
-				pr_debug("%s:writing %d bytes of buffer to dsp\n",
-					__func__,
-					prtd->pcm_count);
-				q6asm_write_nolock(prtd->audio_client,
-					prtd->pcm_count,
-					0, 0, NO_TIMESTAMP);
+				int cnt = prtd->pcm_size / prtd->pcm_count;
+
+				pr_debug("%s %d:buffer %d, period %d, %d writes\n",
+					__func__, __LINE__,
+					prtd->pcm_size, prtd->pcm_count, cnt);
+				while (cnt--) {
+					pr_debug("%s %d:writing %d bytes of buffer to dsp\n",
+						__func__, __LINE__,
+						prtd->pcm_count);
+					q6asm_write_nolock(prtd->audio_client,
+						prtd->pcm_count,
+						0, 0, NO_TIMESTAMP);
+				}
 			} else {
 				while (atomic_read(&prtd->out_needed)) {
 					pr_debug("%s:writing %d bytes of buffer to dsp\n",
@@ -633,11 +643,18 @@ static int msm_pcm_trigger(struct snd_pcm_substream *substream, int cmd)
 	int ret = 0;
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct msm_audio *prtd = runtime->private_data;
+	static int first_time = 1;
 
 	switch (cmd) {
 	case SNDRV_PCM_TRIGGER_START:
 	case SNDRV_PCM_TRIGGER_RESUME:
 	case SNDRV_PCM_TRIGGER_PAUSE_RELEASE:
+		if (first_time) {
+#ifdef CONFIG_MSM_BOOT_TIME_MARKER
+			place_marker("K - Early chime");
+#endif
+			first_time = 0;
+		}
 		pr_debug("%s: Trigger start\n", __func__);
 		ret = q6asm_run_nowait(prtd->audio_client, 0, 0, 0);
 		break;
@@ -1011,9 +1028,9 @@ static int msm_pcm_capture_copy(struct snd_pcm_substream *substream,
 		if (size == 0 || size < prtd->pcm_count) {
 			memset(bufptr + offset + size, 0, prtd->pcm_count - size);
 			if (fbytes > prtd->pcm_count)
-			    size = xfer = prtd->pcm_count;
+				size = xfer = prtd->pcm_count;
 			else
-			    size = xfer = fbytes;
+				size = xfer = fbytes;
 		}
 
 		if (copy_to_user(buf, bufptr+offset, xfer)) {
@@ -1845,7 +1862,7 @@ static int msm_pcm_chmap_ctl_put(struct snd_kcontrol *kcontrol,
 		return 0;
 
 	mutex_lock(&pdata->lock);
-	if (substream->ref_count <= 0) {
+	if (substream->runtime && substream->ref_count <= 0) {
 		pr_err_ratelimited("%s: substream ref_count:%d invalid\n",
 				__func__, substream->ref_count);
 		mutex_unlock(&pdata->lock);
@@ -1918,7 +1935,7 @@ static int msm_pcm_chmap_ctl_get(struct snd_kcontrol *kcontrol,
 		return 0; /* no channels set */
 
 	mutex_lock(&pdata->lock);
-	if (substream->ref_count <= 0) {
+	if (substream->runtime && substream->ref_count <= 0) {
 		pr_err_ratelimited("%s: substream ref_count:%d invalid\n",
 				__func__, substream->ref_count);
 		mutex_unlock(&pdata->lock);
@@ -2223,7 +2240,7 @@ static int msm_pcm_channel_mixer_cfg_ctl_put(struct snd_kcontrol *kcontrol,
 	}
 
 	mutex_lock(&pdata->lock);
-	if (substream->ref_count <= 0) {
+	if (substream->runtime && substream->ref_count <= 0) {
 		pr_err_ratelimited("%s: substream ref_count:%d invalid\n",
 				__func__, substream->ref_count);
 		mutex_unlock(&pdata->lock);

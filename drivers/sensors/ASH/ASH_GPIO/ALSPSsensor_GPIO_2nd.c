@@ -47,11 +47,6 @@ static ALSPSsensor_GPIO * mALSPSsensor_GPIO;
 
 static irqreturn_t ALSPSsensor_irq_handler(int irq, void *dev_id);
 
-#ifdef GPIO_INTEL
-#include <asm/intel-mid.h>
-#endif
-
-#ifdef GPIO_QCOM
 #include <linux/of_gpio.h>
 #define GPIO_LOOKUP_STATE	"alsps_gpio_high_2nd"
 
@@ -67,7 +62,6 @@ static void set_pinctrl(struct i2c_client *client)
 	if(ret < 0)
 		err("%s: pinctrl_select_state ERROR(%d).\n", __FUNCTION__, ret);
 }
-#endif
 static int init_irq (void)
 {
 	int ret = 0;
@@ -83,14 +77,8 @@ static int init_irq (void)
 	}
 
 	/*Request IRQ*/	
-	#ifdef GPIO_INTEL
-	ret = request_irq(irq,ALSPSsensor_irq_handler, IRQF_TRIGGER_LOW, ALSPS_INT_NAME, NULL);
-	#endif
-	
-	#ifdef GPIO_QCOM
 	ret = request_threaded_irq(irq, NULL, ALSPSsensor_irq_handler,
 				IRQF_TRIGGER_LOW | IRQF_ONESHOT, ALSPS_INT_NAME, NULL);
-	#endif
 	if (ret < 0) {
 		err("%s: request_irq/request_threaded_irq ERROR(%d).\n", __FUNCTION__, ret);
 		return ret;
@@ -116,17 +104,9 @@ int ALSPSsensor_gpio_register_2nd(struct i2c_client *client, ALSPSsensor_GPIO *g
 	mALSPSsensor_GPIO = gpio_ist;
 	
 	/* GPIO */
-	#ifdef GPIO_INTEL
-	log("Intel GPIO \n");
-	ALSPS_SENSOR_GPIO = get_gpio_by_name(ALSPS_INTEL_NAME);
-	#endif
-	
-	#ifdef GPIO_QCOM
 	log("Qcom GPIO \n");
 	set_pinctrl(client);
-//	ALSPS_SENSOR_GPIO = of_get_named_gpio_flags(client->dev.of_node, ALSPS_QCOM_NAME, 0, NULL);
 	ALSPS_SENSOR_GPIO = of_get_named_gpio(client->dev.of_node, ALSPS_QCOM_NAME, 0);
-	#endif
 		
 	dbg("[GPIO] GPIO =%d(%d)\n", ALSPS_SENSOR_GPIO, gpio_get_value(ALSPS_SENSOR_GPIO));	
 	/* GPIO Request */

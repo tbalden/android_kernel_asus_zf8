@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/module.h>
@@ -1938,7 +1938,7 @@ static const struct msm_pingroup lahaina_groups[] = {
 };
 
 static const int lahaina_reserved_gpios[] = {
-	52, 53, 54, 55, 56, 57, 58, 59, -1
+	52, 53, 54, 55, -1
 };
 
 static struct pinctrl_qup lahaina_qup_regs[] = {
@@ -1963,10 +1963,10 @@ static const struct msm_gpio_wakeirq_map lahaina_pdc_map[] = {
 	{ 156, 94 }, { 157, 111 }, { 159, 118 }, { 162, 77 }, { 165, 78 },
 	{ 169, 70 }, { 172, 132 }, { 174, 87 }, { 175, 88 }, { 177, 89 },
 	{ 179, 120 }, { 180, 129 }, { 183, 90 }, { 185, 136 }, { 187, 142 },
-	{ 190, 144 }, { 198, 91 }, { 200, 133 }, { 202, 135 },
+	{ 190, 144 }, { 198, 91 }, { 200, 133 }, /*{ 202, 135 },*/
 };
 
-static const struct msm_pinctrl_soc_data lahaina_pinctrl = {
+static struct msm_pinctrl_soc_data lahaina_pinctrl = {
 	.pins = lahaina_pins,
 	.npins = ARRAY_SIZE(lahaina_pins),
 	.functions = lahaina_functions,
@@ -1984,31 +1984,59 @@ static const struct msm_pinctrl_soc_data lahaina_pinctrl = {
 /* By default, all the gpios that are mpm wake capable are enabled.
  * The following list disables the gpios explicitly
  */
-static const unsigned int config_mpm_wake_disable_gpios[] = {
-		82, 	//LCD_TE
-		151 //disable GPIO 151 wake up for suspend GIC stuck issue
-};
+static const unsigned int config_mpm_wake_disable_gpios[] = { 151, 202, 82 };
 
 static void lahaina_pinctrl_config_mpm_wake_disable_gpios(void)
 {
-       unsigned int i;
-       unsigned int n_gpios = ARRAY_SIZE(config_mpm_wake_disable_gpios);
+	unsigned int i;
+	unsigned int n_gpios = ARRAY_SIZE(config_mpm_wake_disable_gpios);
 
-       for (i = 0; i < n_gpios; i++)
-               msm_gpio_mpm_wake_set(config_mpm_wake_disable_gpios[i], false);
+	for (i = 0; i < n_gpios; i++)
+		msm_gpio_mpm_wake_set(config_mpm_wake_disable_gpios[i], false);
+}
+
+static int lahaina_pinctrl_no_wake_probe(struct platform_device *pdev)
+{
+	const __be32 *prop;
+	uint32_t *no_wake_gpios;
+	int i, length;
+
+	prop = of_get_property(pdev->dev.of_node, "no-wake-gpios", &length);
+	if (!prop)
+		return -ENOENT;
+
+	length = length / sizeof(u32);
+
+	no_wake_gpios = devm_kzalloc(&pdev->dev, length * sizeof(uint32_t), GFP_KERNEL);
+	if (!no_wake_gpios)
+		return -ENOMEM;
+
+	for (i = 0; i < length; i++)
+		no_wake_gpios[i] = be32_to_cpu(prop[i]);
+
+	lahaina_pinctrl.no_wake_gpios = no_wake_gpios;
+	lahaina_pinctrl.n_no_wake_gpios = length;
+
+	return 0;
 }
 
 static int lahaina_pinctrl_probe(struct platform_device *pdev)
 {
-	   int ret;
+	int length, ret;
 
-       ret = msm_pinctrl_probe(pdev, &lahaina_pinctrl);
-       if (ret)
-               return ret;
+	if (of_find_property(pdev->dev.of_node, "no-wake-gpios", &length)) {
+		ret = lahaina_pinctrl_no_wake_probe(pdev);
+		if (ret)
+			return ret;
+	}
 
-       lahaina_pinctrl_config_mpm_wake_disable_gpios();
+	ret = msm_pinctrl_probe(pdev, &lahaina_pinctrl);
+	if (ret)
+		return ret;
 
-       return 0;
+	lahaina_pinctrl_config_mpm_wake_disable_gpios();
+
+	return 0;
 }
 
 static const struct of_device_id lahaina_pinctrl_of_match[] = {

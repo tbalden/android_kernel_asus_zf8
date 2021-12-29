@@ -45,9 +45,7 @@
  * @LIGHT_TURNON_DELAY_TIME : After light sensor turn on 250ms, 
  * driver will cat first correct adc/lux value.
  */
-#ifdef CONFIG_TMD2755_FLAG
-#define LIGHT_POLLING_START_DELAY_TIME			(500)
-#define PROXIMITY_OIL_ALGO_DEFAULT_FLAG			(false)
+#if defined ASUS_SAKE_PROJECT
 #define LIGHT_CALDATA_TRANSFER_RATIO1		(17)
 #define LIGHT_CALDATA_TRANSFER_RATIO2		(10)
 #define PROXIMITY_POCKET_MODE_RATIO		(30)
@@ -56,8 +54,16 @@
 #else
 #define PROXIMITY_POCKET_MODE_RATIO		(100)
 #endif
-
+#ifdef CONFIG_TMD2755_FLAG
+/* AMS proximity autok will change adc value, since autok need time, wait for ams chip */
+#define PROXIMITY_CALIBRATION_DELAY		(150)
 #define LIGHT_TURNON_DELAY_TIME			(10)
+#else
+#define PROXIMITY_CALIBRATION_DELAY		(0)
+#define LIGHT_TURNON_DELAY_TIME			(10)
+#endif
+
+#define PROXIMITY_OIL_ALGO_DEFAULT_FLAG			(false)
 
 #define PROXIMITY_TURNON_DELAY_TIME	(11)
 
@@ -87,7 +93,7 @@
 #else
 #define PROXIMITY_POCKET_DEFAULT       (4073)
 #endif //CONFIG_TMD2755_FLAG
-#define PROXIMITY_NOISE_PERIOD       (10)
+#define PROXIMITY_NOISE_PERIOD       (11)
 #define LIGHT_ER_CALIBRATION_DEFAULT (1526)
 /* ASUS BSP +++ Clay: shift lux to mitigate psensor noise when psensor on and lux < offset */
 #define LIGHT_LOW_LUX_NOISE_OFFSET     (0)
@@ -115,7 +121,7 @@
 #define LIGHT_LOW_LUX_AVG_COUNT     (5)
 /* ASUS BSP Clay: average 5 lux for offset behavior to mitigate the low lux gap --- */
 #endif
-#define PROXIMITY_PERIOD       (10)
+#define PROXIMITY_BASIC_PERIOD       (11)
 #define CS_IT_400MS (3)
 #define CS_IT_100MS (1)
 #define CS_IT_50MS (0)

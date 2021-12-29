@@ -350,7 +350,7 @@ static ssize_t  ATT_proximity_show_allreg(struct device *dev,
 		err("2nd IRsensor_show_allreg NOT SUPPORT. \n");
 		return sprintf(buf, "NOT SUPPORT\n");
 	}
-	ret=g_psensor_ATTR->ATTR_Extension->proximity_show_allreg();
+	ret=g_psensor_ATTR->ATTR_Extension->proximity_show_allreg(dev, attr, buf);
 	return sprintf(buf, "%d\n", ret);
 }
 

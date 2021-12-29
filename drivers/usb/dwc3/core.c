@@ -232,6 +232,13 @@ static int dwc3_core_soft_reset(struct dwc3 *dwc)
 		return ret;
 	}
 
+	ret = usb_phy_init(dwc->usb2_phy1);
+	if (ret) {
+		pr_err("%s: usb_phy_init(dwc->usb2_phy1) returned %d\n",
+				__func__, ret);
+		return ret;
+	}
+
 	if (dwc->maximum_speed >= USB_SPEED_SUPER) {
 		ret = usb_phy_init(dwc->usb3_phy);
 		if (ret == -EBUSY) {
@@ -242,6 +249,19 @@ static int dwc3_core_soft_reset(struct dwc3 *dwc)
 			dwc->maximum_speed = USB_SPEED_HIGH;
 		} else if (ret) {
 			pr_err("%s: usb_phy_init(dwc->usb3_phy) returned %d\n",
+					__func__, ret);
+			return ret;
+		}
+
+		ret = usb_phy_init(dwc->usb3_phy1);
+		if (ret == -EBUSY) {
+			/*
+			 * Setting Max speed as high when USB3 PHY initialiation
+			 * is failing and USB superspeed can't be supported.
+			 */
+			dwc->maximum_speed = USB_SPEED_HIGH;
+		} else if (ret) {
+			pr_err("%s: usb_phy_init(dwc->usb3_phy1) returned %d\n",
 					__func__, ret);
 			return ret;
 		}
@@ -593,6 +613,10 @@ static int dwc3_phy_setup(struct dwc3 *dwc)
 	u32 reg;
 
 	reg = dwc3_readl(dwc->regs, DWC3_GUSB3PIPECTL(0));
+	if (dwc->dual_port) {
+		if (reg != dwc3_readl(dwc->regs, DWC3_GUSB3PIPECTL(1)))
+			dev_warn(dwc->dev, "Reset values of pipectl registers are different!\n");
+	}
 
 	/*
 	 * Make sure UX_EXIT_PX is cleared as that causes issues with some
@@ -644,8 +668,14 @@ static int dwc3_phy_setup(struct dwc3 *dwc)
 			DWC3_GUSB3PIPECTL_P3EXSIGP2);
 
 	dwc3_writel(dwc->regs, DWC3_GUSB3PIPECTL(0), reg);
+	if (dwc->dual_port)
+		dwc3_writel(dwc->regs, DWC3_GUSB3PIPECTL(1), reg);
 
 	reg = dwc3_readl(dwc->regs, DWC3_GUSB2PHYCFG(0));
+	if (dwc->dual_port) {
+		if (reg != dwc3_readl(dwc->regs, DWC3_GUSB2PHYCFG(1)))
+			dev_warn(dwc->dev, "Reset values of usb2phycfg registers are different!\n");
+	}
 
 	/* Select the HS PHY interface */
 	switch (DWC3_GHWPARAMS3_HSPHY_IFC(dwc->hwparams.hwparams3)) {
@@ -708,6 +738,8 @@ static int dwc3_phy_setup(struct dwc3 *dwc)
 		reg &= ~DWC3_GUSB2PHYCFG_U2_FREECLK_EXISTS;
 
 	dwc3_writel(dwc->regs, DWC3_GUSB2PHYCFG(0), reg);
+	if (dwc->dual_port)
+		dwc3_writel(dwc->regs, DWC3_GUSB2PHYCFG(1), reg);
 
 	return 0;
 }
@@ -716,12 +748,16 @@ static void dwc3_core_exit(struct dwc3 *dwc)
 {
 	dwc3_event_buffers_cleanup(dwc);
 
+	usb_phy_shutdown(dwc->usb2_phy1);
 	usb_phy_shutdown(dwc->usb2_phy);
+	usb_phy_shutdown(dwc->usb3_phy1);
 	usb_phy_shutdown(dwc->usb3_phy);
 	phy_exit(dwc->usb2_generic_phy);
 	phy_exit(dwc->usb3_generic_phy);
 
+	usb_phy_set_suspend(dwc->usb2_phy1, 1);
 	usb_phy_set_suspend(dwc->usb2_phy, 1);
+	usb_phy_set_suspend(dwc->usb3_phy1, 1);
 	usb_phy_set_suspend(dwc->usb3_phy, 1);
 	phy_power_off(dwc->usb2_generic_phy);
 	phy_power_off(dwc->usb3_generic_phy);
@@ -995,8 +1031,11 @@ int dwc3_core_init(struct dwc3 *dwc)
 	dwc3_set_incr_burst_type(dwc);
 
 	usb_phy_set_suspend(dwc->usb2_phy, 0);
-	if (dwc->maximum_speed >= USB_SPEED_SUPER)
+	usb_phy_set_suspend(dwc->usb2_phy1, 0);
+	if (dwc->maximum_speed >= USB_SPEED_SUPER) {
 		usb_phy_set_suspend(dwc->usb3_phy, 0);
+		usb_phy_set_suspend(dwc->usb3_phy1, 0);
+	}
 
 	ret = phy_power_on(dwc->usb2_generic_phy);
 	if (ret < 0)
@@ -1040,7 +1079,6 @@ int dwc3_core_init(struct dwc3 *dwc)
 		 */
 		if (!dwc3_is_usb31(dwc)) {
 			reg |= DWC3_GUCTL1_PARKMODE_DISABLE_SS;
-			reg |= DWC3_GUCTL1_PARKMODE_DISABLE_HS;
 			reg |= DWC3_GUCTL1_PARKMODE_DISABLE_FSLS;
 		}
 
@@ -1120,19 +1158,21 @@ int dwc3_core_init(struct dwc3 *dwc)
 		dwc3_writel(dwc->regs, DWC3_GUCTL1, reg);
 	}
 
-	dwc3_notify_event(dwc, DWC3_CONTROLLER_POST_RESET_EVENT, 0);
-
 	return 0;
 
 err3:
 	phy_power_off(dwc->usb2_generic_phy);
 
 err2:
+	usb_phy_set_suspend(dwc->usb2_phy1, 1);
+	usb_phy_set_suspend(dwc->usb3_phy1, 1);
 	usb_phy_set_suspend(dwc->usb2_phy, 1);
 	usb_phy_set_suspend(dwc->usb3_phy, 1);
 	dwc3_free_scratch_buffers(dwc);
 
 err1:
+	usb_phy_shutdown(dwc->usb2_phy1);
+	usb_phy_shutdown(dwc->usb3_phy1);
 	usb_phy_shutdown(dwc->usb2_phy);
 	usb_phy_shutdown(dwc->usb3_phy);
 	phy_exit(dwc->usb2_generic_phy);
@@ -1155,6 +1195,12 @@ static int dwc3_core_get_phy(struct dwc3 *dwc)
 	if (node) {
 		dwc->usb2_phy = devm_usb_get_phy_by_phandle(dev, "usb-phy", 0);
 		dwc->usb3_phy = devm_usb_get_phy_by_phandle(dev, "usb-phy", 1);
+		if (dwc->dual_port) {
+			dwc->usb2_phy1 = devm_usb_get_phy_by_phandle(dev,
+								"usb-phy", 2);
+			dwc->usb3_phy1 = devm_usb_get_phy_by_phandle(dev,
+								"usb-phy", 3);
+		}
 	} else {
 		dwc->usb2_phy = devm_usb_get_phy(dev, USB_PHY_TYPE_USB2);
 		dwc->usb3_phy = devm_usb_get_phy(dev, USB_PHY_TYPE_USB3);
@@ -1181,6 +1227,30 @@ static int dwc3_core_get_phy(struct dwc3 *dwc)
 		} else {
 			dev_err(dev, "no usb3 phy configured\n");
 			return ret;
+		}
+	}
+
+	if (dwc->dual_port) {
+		if (IS_ERR(dwc->usb2_phy1)) {
+			ret = PTR_ERR(dwc->usb2_phy1);
+			if (ret == -ENXIO || ret == -ENODEV) {
+				dwc->usb2_phy1 = NULL;
+			} else {
+				if (ret != -EPROBE_DEFER)
+					dev_err(dev, "no usb2 phy1 configured\n");
+				return ret;
+			}
+		}
+
+		if (IS_ERR(dwc->usb3_phy1)) {
+			ret = PTR_ERR(dwc->usb3_phy1);
+			if (ret == -ENXIO || ret == -ENODEV) {
+				dwc->usb3_phy1 = NULL;
+			} else {
+				if (ret != -EPROBE_DEFER)
+					dev_err(dev, "no usb3 phy1 configured\n");
+				return ret;
+			}
 		}
 	}
 
@@ -1622,6 +1692,7 @@ static int dwc3_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, dwc);
 
+	init_waitqueue_head(&dwc->wait_linkstate);
 	spin_lock_init(&dwc->lock);
 
 	pm_runtime_no_callbacks(dev);
@@ -1724,6 +1795,8 @@ static int dwc3_remove(struct platform_device *pdev)
 
 	ipc_log_context_destroy(dwc->dwc_ipc_log_ctxt);
 	dwc->dwc_ipc_log_ctxt = NULL;
+	ipc_log_context_destroy(dwc->dwc_dma_ipc_log_ctxt);
+	dwc->dwc_dma_ipc_log_ctxt = NULL;
 	count--;
 	dwc3_instance[dwc->index] = NULL;
 
@@ -1996,24 +2069,10 @@ static int dwc3_resume(struct device *dev)
 
 	/* Check if platform glue driver handling PM, if not then handle here */
 	if (!dwc3_notify_event(dwc, DWC3_CORE_PM_RESUME_EVENT, 0)) {
-#ifdef CONFIG_MACH_ASUS
-		/*
-		 * If the core was in host mode during suspend, then perform
-		 * runtime resume which will do resume and set the runtime PM
-		 * state as active to reflect actual state of device which
-		 * is now out of LPM. This allows runtime_suspend later.
-		 */
-		if (dwc->current_dr_role == DWC3_GCTL_PRTCAP_HOST)
+		if (dwc->current_dr_role == DWC3_GCTL_PRTCAP_HOST &&
+					pm_runtime_status_suspended(dev))
 			pm_runtime_resume(dev);
-#else
-		/*
-		 * If the core was in host mode during suspend, then set the
-		 * runtime PM state as active to reflect actual state of device
-		 * which is now out of LPM. This allows runtime_suspend later.
-		 */
-		if (dwc->current_dr_role == DWC3_GCTL_PRTCAP_HOST)
-			goto runtime_set_active;
-#endif
+
 		return 0;
 	}
 
@@ -2022,13 +2081,7 @@ static int dwc3_resume(struct device *dev)
 	ret = dwc3_resume_common(dwc, PMSG_RESUME);
 	if (ret)
 		return ret;
-#ifdef CONFIG_MACH_ASUS
-#else
-runtime_set_active:
-	pm_runtime_disable(dev);
-	pm_runtime_set_active(dev);
-	pm_runtime_enable(dev);
-#endif
+
 	return 0;
 }
 #endif /* CONFIG_PM_SLEEP */

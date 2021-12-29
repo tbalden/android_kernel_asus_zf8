@@ -60,7 +60,8 @@ enum eMCUState {
 	MCU_WAIT_POWER_READY,
 	MCU_CHECKING_READY,
 	MCU_READY,
-	MCU_LOOP_TEST
+	MCU_LOOP_TEST,
+	MCU_PROGRAMMING_RETRY
 } MCUState=MCU_TBD;
 
 static signed char iCloseCounter=0;
@@ -694,7 +695,10 @@ static int MSP43FR2311_Update_Firmware_Load_File(bool bLoadFromFile) {
 			waitDelayAndShowText("Erase main memory");
 			if(MSP430BSL_unlockDevice(bslPassword) != MSP430_STATUS_OPERATION_OK )
 			{
-				pr_err("[MCU] ERROR: Could not unlock device! Cnt:%d\n", ii);
+				pr_err("[MCU] unlock device Cnt:%d\n", ii);	
+				if(ii >= 3)	
+					pr_err("[MCU] ERROR: Could not unlock device! Cnt:%d\n", ii);
+
 //				goto BSLCleanUp;
 			}
 		}
@@ -824,6 +828,7 @@ BSLCleanUp:
 	if(iProgrammingFail >= UPDATE_FW_RETRY_COUNT){
 		pr_err("[MCU] Try 3 times to update new FW, the result is also fail.\n");
 		MCUState = MCU_READY;	//although update fail, but need let user can control MCU.
+		iProgrammingFail = 0;	//Clear for next time also can try 3 times.
 	}
 	
 	//Zen7, power off/on when go to bsl mode fail.
@@ -834,7 +839,11 @@ BSLCleanUp:
 	MSP430FR2311_power_control(1);
 	//gpio_set_value(mcu_info->mcu_5v_boost_enable, 1);
 	msleep(200);
-	
+
+	if(iProgrammingFail < UPDATE_FW_RETRY_COUNT){
+		pr_err("[MCU] Re-try flash.\n");
+		MCUState = MCU_PROGRAMMING_RETRY;	
+	}	
 	return res;
 
 }
@@ -1126,9 +1135,15 @@ static void mcu_do_work_later(struct work_struct *work)
 			}
 			return;
 		}*/
-		
-		if (MCUState!=MCU_READY && MSP43FR2311_Update_Firmware()==0) {	//If update FW fail, will retry 3 times in function MSP43FR2311_Update_Firmware().
-			MCUState=MCU_CHECKING_READY;
+
+		if (MCUState==MCU_PROGRAMMING){
+			cancel_delayed_work(&report_work);
+			queue_delayed_work(mcu_info->mcu_wq, &report_work, msecs_to_jiffies(5000));	//Patch for 191 cmd.
+			return;
+		}else{
+			if (MCUState!=MCU_READY && MSP43FR2311_Update_Firmware()==0) {	//If update FW fail, will retry 3 times in function MSP43FR2311_Update_Firmware().
+				MCUState=MCU_CHECKING_READY;
+			}
 		}
 
 		//finally, we do not update firmware successfully, do this again
@@ -1697,16 +1712,23 @@ int MCU_I2C_power_control(bool enable)
 			if(ret) 
 				pr_err("[MCU] Ldo11 enable failed ret=%d\n", ret);       
         }else{
-        	gpio_set_value(mcu_info->mcu_power, 0);
-        	
-        	ret = regulator_is_enabled(mcu_info->vcc_l10a_3p3);
-			if(ret){
-				pr_err("[MCU] Ldo11 is enabled, so disable it.\n");
+				gpio_set_value(mcu_info->mcu_power, 0);
 				
-				ret = regulator_disable(mcu_info->vcc_l10a_3p3);
-				if(ret) 
-					pr_err("[MCU] Ldo11 disable failed ret=%d\n", ret);
-			}
+				ret = regulator_is_enabled(mcu_info->vcc_l10a_3p3); 	//need positive
+				if(ret){
+					pr_err("[MCU] Ldo11 is enabled, so disable it. %d \n", ret);
+					
+					ret = regulator_disable(mcu_info->vcc_l10a_3p3);
+					if(ret){ 
+						pr_err("[MCU] Ldo11 disable failed ret=%d\n", ret);
+				
+						ret = regulator_force_disable(mcu_info->vcc_l10a_3p3);
+				
+						if (ret)				
+							pr_err("[MCU] Ldo11 force_disable failed, ret=%d\n", ret);
+				
+					}	
+				}
         }
 
         return ret;

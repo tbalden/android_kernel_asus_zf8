@@ -19,11 +19,11 @@
 #define __LINUX_ALSPS_VCNL36866_H
 
 #ifdef ONE_PL_CHIP
-#define VCNL36866_PROXIMITY_INF_DEFAULT     (103)
-#define VCNL36866_PROXIMITY_THDL_DEFAULT    (162)
-#define VCNL36866_PROXIMITY_THDH_DEFAULT    (270)
+#define VCNL36866_PROXIMITY_INF_DEFAULT     (92)
+#define VCNL36866_PROXIMITY_THDL_DEFAULT    (139)
+#define VCNL36866_PROXIMITY_THDH_DEFAULT    (215)
 #define VCNL36866_PROXIMITY_AUTOK_MIN       (3)
-#define VCNL36866_PROXIMITY_AUTOK_MAX       (600)
+#define VCNL36866_PROXIMITY_AUTOK_MAX       (2200)
 #define VCNL36866_LIGHT_CALIBRATION_DEFAULT (846)
 #else
 #define VCNL36866_PROXIMITY_INF_DEFAULT     (416)
@@ -258,7 +258,7 @@ static struct vcnl36866_dynamic vcnl36866_dynamic_array[] = {
 };
 #elif defined LONG_LENGTH_LOGN_IT_PERF
 static struct vcnl36866_dynamic vcnl36866_dynamic_array[] = {
-	{.IT_TIME = VCNL36866_CS_IT_100MS, .sensitivity = 4, .evt_skip_time_ns = 0},
+	{.IT_TIME = VCNL36866_CS_IT_100MS, .sensitivity = 4, .evt_skip_time_ns = 100000000},
 	{.IT_TIME = VCNL36866_CS_IT_400MS, .sensitivity = 1, .evt_skip_time_ns = 500000000},
 	{.IT_TIME = VCNL36866_CS_IT_50MS, .sensitivity = 8, .evt_skip_time_ns = 100000000},
 };

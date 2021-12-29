@@ -1432,7 +1432,7 @@ static bool inherit_taint(struct module *mod, struct module *owner)
 	if (!owner || !test_bit(TAINT_PROPRIETARY_MODULE, &owner->taints))
 		return true;
 
-	if (mod->m1.using_gplonly_symbols) {
+	if (mod->using_gplonly_symbols) {
 		pr_err("%s: module using GPL-only symbols uses symbols from proprietary module %s.\n",
 			mod->name, owner->name);
 		return false;
@@ -1471,7 +1471,7 @@ static const struct kernel_symbol *resolve_symbol(struct module *mod,
 		goto unlock;
 
 	if (license == GPL_ONLY)
-		mod->m1.using_gplonly_symbols = true;
+		mod->using_gplonly_symbols = true;
 
 	if (!inherit_taint(mod, owner)) {
 		sym = NULL;
@@ -2905,10 +2905,6 @@ static int module_sig_check(struct load_info *info, int flags)
 	const char *reason;
 	const void *mod = info->hdr;
 
-#if 1
-	return 0;
-#endif
-
 	/*
 	 * Require flags == 0, as a module with version information
 	 * removed is no longer the module that was signed
@@ -3865,11 +3861,6 @@ static int load_module(struct load_info *info, const char __user *uargs,
 		goto free_copy;
 	}
 
-#if 1
-	flags |= MODULE_INIT_IGNORE_MODVERSIONS;
-	flags |= MODULE_INIT_IGNORE_VERMAGIC;
-#endif
-
 	err = module_sig_check(info, flags);
 	if (err)
 		goto free_copy;
@@ -4015,6 +4006,8 @@ static int load_module(struct load_info *info, const char __user *uargs,
 	mutex_unlock(&module_mutex);
 
  ddebug_cleanup:
+	/* Clean up CFI for the module. */
+	cfi_cleanup(mod);
 	ftrace_release_mod(mod);
 	dynamic_debug_remove(mod, info->debug);
 	synchronize_rcu();

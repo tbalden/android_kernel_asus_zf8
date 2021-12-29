@@ -83,6 +83,7 @@ struct sae_auth_retry {
  * @is_pmf_enabled: True if PMF is enabled
  * @last_assoc_received_time: last assoc received time
  * @last_disassoc_deauth_received_time: last disassoc/deauth received time
+ * @twt_ctx: TWT context
  */
 struct peer_mlme_priv_obj {
 	uint8_t last_pn_valid;
@@ -91,6 +92,9 @@ struct peer_mlme_priv_obj {
 	bool is_pmf_enabled;
 	qdf_time_t last_assoc_received_time;
 	qdf_time_t last_disassoc_deauth_received_time;
+#ifdef WLAN_SUPPORT_TWT
+	struct twt_context twt_ctx;
+#endif
 };
 
 /**
@@ -259,6 +263,8 @@ struct mscs_req_info {
  * @opr_rate_set: operational rates set
  * @ext_opr_rate_set: extended operational rates set
  * @mscs_req_info: Information related to mscs request
+ * @he_config: he config
+ * @he_sta_obsspd: he_sta_obsspd
  */
 struct mlme_legacy_priv {
 	bool chan_switch_in_progress;
@@ -288,6 +294,10 @@ struct mlme_legacy_priv {
 	struct mlme_cfg_str ext_opr_rate_set;
 #ifdef WLAN_FEATURE_MSCS
 	struct mscs_req_info mscs_req_info;
+#endif
+#ifdef WLAN_FEATURE_11AX
+	tDot11fIEhe_cap he_config;
+	uint32_t he_sta_obsspd;
 #endif
 };
 
@@ -359,6 +369,15 @@ uint8_t *mlme_get_dynamic_oce_flags(struct wlan_objmgr_vdev *vdev);
  */
 struct wlan_mlme_nss_chains *mlme_get_dynamic_vdev_config(
 					struct wlan_objmgr_vdev *vdev);
+
+/**
+ * mlme_get_vdev_he_ops()  - Get vdev HE operations IE info
+ * @psoc: Pointer to PSOC object
+ * @vdev_id: vdev id
+ *
+ * Return: HE ops IE
+ */
+uint32_t mlme_get_vdev_he_ops(struct wlan_objmgr_psoc *psoc, uint8_t vdev_id);
 
 /**
  * mlme_get_ini_vdev_config() - get the vdev ini config params
@@ -666,11 +685,21 @@ mlme_get_operations_bitmap(struct wlan_objmgr_psoc *psoc, uint8_t vdev_id);
  * @reqs: RSO stop requestor
  * @clear: clear bit if true else set bit
  *
- * Return: bitmap value
+ * Return: None
  */
 void
 mlme_set_operations_bitmap(struct wlan_objmgr_psoc *psoc, uint8_t vdev_id,
 			   enum wlan_cm_rso_control_requestor reqs, bool clear);
+/**
+ * mlme_clear_operations_bitmap() - Clear mlme operations bitmap which
+ *  indicates what mlme operations are in progress
+ * @psoc: PSOC pointer
+ * @vdev_id: vdev for which the mlme operation bitmap is requested
+ *
+ * Return: None
+ */
+void
+mlme_clear_operations_bitmap(struct wlan_objmgr_psoc *psoc, uint8_t vdev_id);
 
 #define MLME_IS_ROAM_STATE_RSO_ENABLED(psoc, vdev_id) \
 	(mlme_get_roam_state(psoc, vdev_id) == WLAN_ROAM_RSO_ENABLED)

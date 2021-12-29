@@ -769,6 +769,7 @@ static int fts_read_parse_touchdata(struct fts_ts_data *data)
 
         if (EVENT_DOWN(events[i].flag) && (data->point_num == 0)) {
             FTS_INFO("abnormal touch data from fw");
+            fts_release_all_finger();
             return -EIO;
         }
     }

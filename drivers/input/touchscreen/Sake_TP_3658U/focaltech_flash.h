@@ -135,7 +135,7 @@ enum UPGRADE_SPEC {
 *****************************************************************************/
 /* IC info */
 struct upgrade_func {
-    u64 ctype[FTX_MAX_COMPATIBLE_TYPE];
+    u16 ctype[FTS_MAX_COMPATIBLE_TYPE];
     u32 fwveroff;
     u32 fwcfgoff;
     u32 appoff;
@@ -203,6 +203,7 @@ struct fts_upgrade {
 *****************************************************************************/
 extern struct upgrade_func upgrade_func_ft5652;
 
+
 /*****************************************************************************
 * Static function prototypes
 *****************************************************************************/
@@ -211,5 +212,6 @@ int fts_fwupg_enter_into_boot(void);
 int fts_fwupg_erase(u32 delay);
 int fts_fwupg_ecc_cal(u32 saddr, u32 len);
 int fts_flash_write_buf(u32 saddr, u8 *buf, u32 len, u32 delay);
+int fts_flash_read_buf(u32 saddr, u8 *buf, u32 len);
 int fts_fwupg_upgrade(struct fts_upgrade *upg);
 #endif

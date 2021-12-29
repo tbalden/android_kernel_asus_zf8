@@ -1,1 +1,1 @@
-obj-$(CONFIG_TOUCHSCREEN_FTS) += focaltech_upgrade_zf8.o
+obj-$(CONFIG_TOUCHSCREEN_FTS) += focaltech_upgrade_ft3658u.o

@@ -373,6 +373,8 @@ static int a6xx_hwsched_gmu_power_off(struct adreno_device *adreno_dev)
 
 	/* Now that we are done with GMU and GPU, Clear the GBIF */
 	ret = a6xx_halt_gbif(adreno_dev);
+	/* De-assert the halts */
+	kgsl_regwrite(device, A6XX_GBIF_HALT, 0x0);
 
 	a6xx_gmu_irq_disable(adreno_dev);
 
@@ -603,6 +605,13 @@ static int a6xx_hwsched_power_off(struct adreno_device *adreno_dev)
 	if (!test_bit(GMU_PRIV_GPU_STARTED, &gmu->flags))
 		return 0;
 
+	/*
+	* If this config is enabled, the smmu driver keeps the cx gdsc always
+	* ON. So it is better if we don't turn off the GPU
+	*/
+	if (IS_ENABLED(CONFIG_ARM_SMMU_POWER_ALWAYS_ON))
+		return 0;
+
 	trace_kgsl_pwr_request_state(device, KGSL_STATE_SLUMBER);
 
 	/* process any profiling results that are available */
@@ -651,6 +660,8 @@ no_gx_power:
 	del_timer_sync(&device->idle_timer);
 
 	kgsl_pwrscale_sleep(device);
+
+	kgsl_pwrctrl_clear_l3_vote(device);
 
 	trace_kgsl_pwr_set_state(device, KGSL_STATE_SLUMBER);
 

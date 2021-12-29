@@ -144,6 +144,7 @@ static char *ramdisk_execute_command;
 #ifdef CONFIG_MACH_ASUS
 char g_lcd_unique_id[10];
 int   g_lcd_stage_id;
+EXPORT_SYMBOL(g_lcd_stage_id);
 #endif
 
 /*

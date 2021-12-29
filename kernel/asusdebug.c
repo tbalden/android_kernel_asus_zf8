@@ -35,6 +35,8 @@
 #include <linux/rtc.h>
 #include "locking/rtmutex_common.h"
 // ASUS_BSP +++
+#include <linux/asusdebug.h>
+
 char evtlog_bootup_reason[100];
 char evtlog_poweroff_reason[100];
 char evtlog_warm_reset_reason[100];
@@ -270,7 +272,7 @@ void print_all_thread_info(void)
 	g_iPtr = 0;
 	memset_nc(g_phonehang_log, 0, PHONE_HANG_LOG_SIZE);
 
-	save_log("PhoneHang-%04d%02d%02d-%02d%02d%02d.txt  ---  ASUS_SW_VER : %s----------------------------------------------\r\n", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, ASUS_SW_VER);
+	save_log("PhoneHang-%04d%02d%02d-%02d%02d%02d.txt  ---  ASUS_SW_VER_CHIP : %s----------------------------------------------\r\n", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, ASUS_SW_VER_CHIP);
 	save_log(" pID----ppID----NAME----------------SumTime---vruntime--SPri-NPri-State----------PmpCnt-Binder----Waiting\r\n");
 
 	for_each_process(pts){
@@ -514,7 +516,7 @@ void save_all_thread_info(void)
 	g_phonehang_log = (char *)PHONE_HANG_LOG_BUFFER;
 	g_iPtr = 0;
 	memset_nc(g_phonehang_log,0, PHONE_HANG_LOG_SIZE);
-	save_log("ASUSSlowg-%04d%02d%02d-%02d%02d%02d.txt  ---  ASUS_SW_VER : %s----------------------------------------------\r\n", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, ASUS_SW_VER);
+	save_log("ASUSSlowg-%04d%02d%02d-%02d%02d%02d.txt  ---  ASUS_SW_VER_CHIP : %s----------------------------------------------\r\n", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, ASUS_SW_VER_CHIP);
 	save_log(" pID----ppID----NAME----------------SumTime---vruntime--SPri-NPri-State----------PmpCnt-binder----Waiting\r\n");
 	if (ptis_head != NULL) {
 		struct thread_info_save *ptis_next = ptis_head->pnext;
@@ -714,7 +716,7 @@ void delta_all_thread_info(void)
 	g_iPtr = 0;
 	memset_nc(g_phonehang_log, 0, PHONE_HANG_LOG_SIZE);
 
-	save_log("ASUSSlowg-%04d%02d%02d-%02d%02d%02d-delta.txt  ---  ASUS_SW_VER : %s----------------------------------------------\r\n", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, ASUS_SW_VER);
+	save_log("ASUSSlowg-%04d%02d%02d-%02d%02d%02d-delta.txt  ---  ASUS_SW_VER_CHIP : %s----------------------------------------------\r\n", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, ASUS_SW_VER_CHIP);
 
 	save_log("DELTA INFO----------------------------------------------------------------------------------------------\r\n");
 	save_log(" pID----ppID----NAME----------------SumTime---vruntime--SPri-NPri-State----------PmpCnt----Waiting\r\n");
@@ -810,8 +812,7 @@ void save_last_shutdown_log(char *filename)
 		nanosec_rem / 1000);
 
 	initKernelEnv();
-
-	fd_logcat = ksys_open("/asdf/last_logcat_16K", O_CREAT | O_RDWR | O_SYNC, S_IWUGO | S_IRUGO);
+	fd_logcat = ksys_open("/asdf/last_logcat", O_CREAT | O_RDWR | O_SYNC, S_IWUGO | S_IRUGO);
 	if (!IS_ERR((const void *)(ulong)fd_logcat)) {
 		printk("[ASDF] qqqfailed to save last logcat to last_logcat [%d]\n",fd_logcat);
 		ksys_write(fd_logcat, (unsigned char *)last_logcat_buffer, LOGCAT_BUFFER_SIZE);
@@ -843,29 +844,13 @@ void save_last_shutdown_log(char *filename)
 	/* ASUS_BSP Paul +++ */
 
 	printk_buffer_index = *(printk_buffer_slot2_addr + 1);
-	if ((printk_buffer_index < PRINTK_BUFFER_SLOT_SIZE) && (LAST_KMSG_SIZE < SZ_128K)) {
-		fd_kmsg = ksys_open("/asdf/last_kmsg_16K", O_CREAT | O_RDWR | O_SYNC, S_IWUGO | S_IRUGO);
+		fd_kmsg = ksys_open("/asdf/last_kmsg", O_CREAT | O_RDWR | O_SYNC, S_IWUGO | S_IRUGO);
 		if (!IS_ERR((const void *)(ulong)fd_kmsg)) {
-			char *buf = kzalloc(LAST_KMSG_SIZE, GFP_ATOMIC);
-			if (!buf) {
-				printk("[ASDF] failed to allocate buffer for last_kmsg\n");
-			} else {
-				if (printk_buffer_index > LAST_KMSG_SIZE) {
-					memcpy(buf, last_shutdown_log + printk_buffer_index - LAST_KMSG_SIZE, LAST_KMSG_SIZE);
-				} else {
-					ulong part1 = LAST_KMSG_SIZE - printk_buffer_index;
-					ulong part2 = printk_buffer_index;
-					memcpy(buf, last_shutdown_log + PRINTK_BUFFER_SLOT_SIZE - part1, part1);
-					memcpy(buf + part1, last_shutdown_log, part2);
-				}
-				ksys_write(fd_kmsg, buf, LAST_KMSG_SIZE);
-				kfree(buf);
-			}
+			ksys_write(fd_kmsg, (unsigned char *)last_shutdown_log, PRINTK_BUFFER_SLOT_SIZE);
 			ksys_close(fd_kmsg);
 		} else {
 			printk("[ASDF] failed to save last shutdown log to last_kmsg\n");
 		}
-	}
 
 	/* ASUS_BSP Paul --- */
 	deinitKernelEnv();
@@ -987,7 +972,7 @@ static void do_write_event_worker(struct work_struct *work)
                 "\n\n---------------System Boot----%s---------\n"
                 "[Reboot] Warm reset Reason: %s ###### \n"
                 "%s \n",
-                ASUS_SW_VER,
+                ASUS_SW_VER_CHIP,
                 evtlog_warm_reset_reason,
                 asus_boot_reason);
 
@@ -996,7 +981,7 @@ static void do_write_event_worker(struct work_struct *work)
                 "\n\n---------------System Boot----%s---------\n"
                 "[Shutdown] Power off Reason: %s ###### \n"
                 "%s \n",
-                ASUS_SW_VER,
+                ASUS_SW_VER_CHIP,
                 evtlog_poweroff_reason,
                 asus_boot_reason);
         }
@@ -1636,13 +1621,12 @@ static struct file_operations turnon_asusdebug_proc_ops = {
 /* ASUS_BSP Paul +++ */
 static ssize_t last_logcat_proc_write(struct file *filp, const char __user *buff, size_t len, loff_t *off)
 {
-	char messages[1024];
+	char messages[4096];
 	char *last_logcat_buffer;
 
 	memset(messages, 0, sizeof(messages));
-
-	if (len > 1024)
-		len = 1024;
+	if (len > 4096)
+		len = 4096;
 	if (copy_from_user(messages, buff, len))
 		return -EFAULT;
 
@@ -1694,14 +1678,12 @@ static void  register_minidump_log_buf(void)
 	if (msm_minidump_add_region(&md_entry))
 		pr_err("Failed to add logbuf in Minidump\n");
 
-#ifdef ASUS_ZS673KS_PROJECT
 	strlcpy(md_entry.name, "KLLOGCAT", sizeof(md_entry.name));
 	md_entry.virt_addr = (uintptr_t) (LOGCAT_BUFFER);
 	md_entry.phys_addr = (uintptr_t) (LOGCAT_BUFFER_PA);
 	md_entry.size = LOGCAT_BUFFER_SIZE;
 	if (msm_minidump_add_region(&md_entry))
 		pr_err("Failed to add logbuf in Minidump\n");
-#endif //ASUS_ZS673KS_PROJECT
 }
 
 static int __init proc_asusdebug_init(void)

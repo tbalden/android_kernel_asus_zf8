@@ -191,6 +191,9 @@ enum cam_camnoc_port_type {
 	CAM_CAMNOC_TFE_1,
 	CAM_CAMNOC_TFE_2,
 	CAM_CAMNOC_OPE,
+	CAM_CAMNOC_IFE01234_RDI_WRITE,
+	CAM_CAMNOC_IFE01_NRDI_WRITE,
+	CAM_CAMNOC_IFE2_NRDI_WRITE,
 };
 
 /**
@@ -351,6 +354,18 @@ struct cam_cpas_work_payload {
 	uint32_t irq_data;
 	ktime_t workq_scheduled_ts;
 	struct work_struct work;
+};
+
+/**
+ * struct cam_cpas_camnoc_qchannel : Cpas camnoc qchannel info
+ *
+ * @qchannel_ctrl: offset to configure to control camnoc qchannel interface
+ * @qchannel_status: offset to read camnoc qchannel interface status
+ *
+ */
+struct cam_cpas_camnoc_qchannel {
+	uint32_t qchannel_ctrl;
+	uint32_t qchannel_status;
 };
 
 #endif /* _CAM_CPASTOP_HW_H_ */

@@ -99,6 +99,7 @@ Test Status
 #define FACTORY_REG_LCD_NOISE_TTHR              0x14
 #define FACTORY_REG_OPEN_START                  0x15
 #define FACTORY_REG_OPEN_STATE                  0x16
+#define FACTORY_REG_OPEN_ADDR                   0xCF
 #define FACTORY_REG_OPEN_IDLE                   0x03
 #define FACTORY_REG_OPEN_BUSY                   0x01
 #define FACTORY_REG_CB_ADDR_H                   0x18
@@ -128,8 +129,10 @@ Test Status
 #define FACTORY_REG_OPEN_TEST_EN                0xA0
 #define FACTORY_REG_RAWDATA_TARGET              0xCA
 
+
 /* mc_sc */
 #define FACTORY_REG_FRE_LIST                    0x0A
+#define FACTORY_REG_DATA_TYPE                   0x5B
 #define FACTORY_REG_NORMALIZE                   0x16
 #define FACTORY_REG_RAWDATA_ADDR_MC_SC          0x36
 #define FACTORY_REG_PATTERN                     0x53
@@ -230,12 +233,14 @@ struct incell_threshold_b {
     int lcdnoise_frame;
     int lcdnoise_coefficient;
     int lcdnoise_coefficient_vkey;
+    int open_diff_min;
     int open_nmos;
     int keyshort_k1;
     int keyshort_cb_max;
     int rawdata2_min;
     int rawdata2_max;
     int mux_open_cb_min;
+    int open_delta_V;
 };
 
 struct incell_threshold {
@@ -269,6 +274,9 @@ struct mc_sc_testitem {
     u32 scap_rawdata_test           : 1;
     u32 short_test                  : 1;
     u32 panel_differ_test           : 1;
+    u32 noise_test                  : 1;
+    u32 null_noise_test             : 1;
+    u32 scap_noise_test             : 1;
 };
 
 struct mc_sc_threshold_b {
@@ -312,12 +320,30 @@ struct mc_sc_threshold_b {
     int scap_rawdata_hov_min;
     int scap_rawdata_hov_max;
     int scap_rawdata_hov_check;
+    int noise_min;
+    int noise_max;
+    int scap_noise_wp_off_check;
+    int scap_noise_wp_on_check;
+    int scap_noise_hi_check;
+    int scap_noise_hov_check;
+    int scap_noise_off_min;
+    int scap_noise_off_max;
+    int scap_noise_on_min;
+    int scap_noise_on_max;
+    int scap_noise_hi_min;
+    int scap_noise_hi_max;
+    int scap_noise_hov_min;
+    int scap_noise_hov_max;
+    int scan_frame_num;
+    int null_scan_value;
 };
 
 struct mc_sc_threshold {
     struct mc_sc_threshold_b basic;
     int *rawdata_h_min;
     int *rawdata_h_max;
+    int *noise_min;
+    int *noise_max;
     int *rawdata_l_min;
     int *rawdata_l_max;
     int *tx_linearity_max;
@@ -340,6 +366,14 @@ struct mc_sc_threshold {
     int *scap_rawdata_hi_max;
     int *scap_rawdata_hov_min;
     int *scap_rawdata_hov_max;
+    int *scap_noise_off_min;
+    int *scap_noise_off_max;
+    int *scap_noise_on_min;
+    int *scap_noise_on_max;
+    int *scap_noise_hi_min;
+    int *scap_noise_hi_max;
+    int *scap_noise_hov_min;
+    int *scap_noise_hov_max;
     int *panel_differ_min;
     int *panel_differ_max;
 };
@@ -460,13 +494,15 @@ struct fts_test {
 };
 
 struct test_funcs {
-    u64 ctype[FTX_MAX_COMPATIBLE_TYPE];
+    u16 ctype[FTS_MAX_COMPATIBLE_TYPE];
     enum test_hw_type hwtype;
     int startscan_mode;
     int key_num_total;
     bool rawdata2_support;
     bool force_touch;
     bool mc_sc_short_v2;
+    bool raw_u16;
+    bool cb_high_support;
     int (*param_init)(void);
     int (*init)(void);
     int (*start_test)(void);
@@ -532,6 +568,9 @@ enum csv_itemcode_mc_sc {
     CODE_M_WEAK_SHORT_CIRCUIT_TEST = 15,
     CODE_M_RAWDATA_UNIFORMITY_TEST = 16,
     CODE_M_PANELDIFFER_TEST = 20,
+    CODE_M_NOISE_TEST = 14,
+    CODE_M_NULL_NOISE_TEST = 41,
+    CODE_M_SCAP_NOISE_TEST = 37,
 };
 
 enum csv_itemcode_sc {
@@ -572,6 +611,8 @@ int mapping_switch(u8 mapping);
 bool get_fw_wp(u8 wp_channel_select, enum wp_type water_proof_type);
 int get_cb_mc_sc(u8 wp, int byte_num, int *cb_buf, enum byte_mode mode);
 int get_rawdata_mc_sc(enum wp_type wp, int *data);
+int get_noise_mc_sc(enum wp_type wp, int *data);
+
 int get_rawdata_mc(u8 fre, u8 fir, int *rawdata);
 int short_get_adc_data_mc(u8 retval, int byte_num, int *adc_buf, u8 mode);
 bool compare_mc_sc(bool, bool, int *, int *, int *);

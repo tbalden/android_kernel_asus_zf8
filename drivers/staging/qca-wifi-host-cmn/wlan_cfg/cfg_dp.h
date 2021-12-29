@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2018-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -111,13 +111,21 @@
 #endif
 #endif
 
-#define WLAN_CFG_RX_PENDING_HL_THRESHOLD 0x60000
-#define WLAN_CFG_RX_PENDING_HL_THRESHOLD_MIN 0
-#define WLAN_CFG_RX_PENDING_HL_THRESHOLD_MAX 0x80000
+#ifdef NBUF_MEMORY_DEBUG
+#define WLAN_CFG_RX_PENDING_THRESHOLD_DEFAULT 0x60000
+#else
+#define WLAN_CFG_RX_PENDING_THRESHOLD_DEFAULT 0xD0000
+#endif
 
-#define WLAN_CFG_RX_PENDING_LO_THRESHOLD 0x60000
+#define WLAN_CFG_RX_PENDING_HL_THRESHOLD \
+		WLAN_CFG_RX_PENDING_THRESHOLD_DEFAULT
+#define WLAN_CFG_RX_PENDING_HL_THRESHOLD_MIN 0
+#define WLAN_CFG_RX_PENDING_HL_THRESHOLD_MAX 0x200000
+
+#define WLAN_CFG_RX_PENDING_LO_THRESHOLD \
+		WLAN_CFG_RX_PENDING_THRESHOLD_DEFAULT
 #define WLAN_CFG_RX_PENDING_LO_THRESHOLD_MIN 100
-#define WLAN_CFG_RX_PENDING_LO_THRESHOLD_MAX 0x80000
+#define WLAN_CFG_RX_PENDING_LO_THRESHOLD_MAX 0x200000
 
 #define WLAN_CFG_INT_TIMER_THRESHOLD_WBM_RELEASE_RING 256
 #define WLAN_CFG_INT_TIMER_THRESHOLD_REO_RING 512
@@ -974,6 +982,10 @@
 	CFG_INI_BOOL("dp_rx_buff_prealloc_pool", false, \
 		     "Enable/Disable DP RX emergency buffer pool support")
 
+#define CFG_DP_RX_REFILL_BUFF_POOL_ENABLE \
+	CFG_INI_BOOL("dp_rx_refill_buff_pool", false, \
+		     "Enable/Disable DP RX refill buffer pool support")
+
 #define CFG_DP_POLL_MODE_ENABLE \
 		CFG_INI_BOOL("dp_poll_mode_enable", false, \
 		"Enable/Disable Polling mode for data path")
@@ -1047,6 +1059,24 @@
 		    WLAN_CFG_SEND_ICMP_REQ_TO_FW_MAX, \
 		    WLAN_CFG_SEND_ICMP_REQ_TO_FW, \
 		    CFG_VALUE_OR_DEFAULT, "Send ICMP Request packets to FW")
+
+/*
+ * <ini>
+ * gForceRX64BA - enable force 64 blockack mode for RX
+ * @Min: 0
+ * @Max: 1
+ * @Default: 0
+ *
+ * This ini is used to control DP Software to use 64 blockack
+ * for RX direction forcibly
+ *
+ * Usage: Internal
+ *
+ * </ini>
+ */
+#define CFG_FORCE_RX_64_BA \
+		CFG_INI_BOOL("gForceRX64BA", \
+		false, "Enable/Disable force 64 blockack in RX side")
 
 #define CFG_DP \
 		CFG(CFG_DP_HTT_PACKET_TYPE) \
@@ -1128,6 +1158,7 @@
 		CFG(CFG_DP_REO_RINGS_MAP) \
 		CFG(CFG_DP_PEER_EXT_STATS) \
 		CFG(CFG_DP_RX_BUFF_POOL_ENABLE) \
+		CFG(CFG_DP_RX_REFILL_BUFF_POOL_ENABLE) \
 		CFG(CFG_DP_RX_PENDING_HL_THRESHOLD) \
 		CFG(CFG_DP_RX_PENDING_LO_THRESHOLD) \
 		CFG(CFG_DP_LEGACY_MODE_CSUM_DISABLE) \
@@ -1136,5 +1167,6 @@
 		CFG(CFG_DP_TX_PER_PKT_VDEV_ID_CHECK) \
 		CFG(CFG_DP_RX_FST_IN_CMEM) \
 		CFG(CFG_DP_WOW_CHECK_RX_PENDING) \
-		CFG(CFG_DP_SEND_ICMP_REQ_TO_FW)
+		CFG(CFG_DP_SEND_ICMP_REQ_TO_FW) \
+		CFG(CFG_FORCE_RX_64_BA)
 #endif /* _CFG_DP_H_ */

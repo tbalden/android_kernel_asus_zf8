@@ -446,11 +446,16 @@ static int ufs_qcom_host_reset(struct ufs_hba *hba)
 {
 	int ret = 0;
 	struct ufs_qcom_host *host = ufshcd_get_variant(hba);
+	bool reenable_intr = false;
 
 	if (!host->core_reset) {
 		dev_warn(hba->dev, "%s: reset control not set\n", __func__);
 		goto out;
 	}
+
+	reenable_intr = hba->is_irq_enabled;
+	disable_irq(hba->irq);
+	hba->is_irq_enabled = false;
 
 	ret = reset_control_assert(host->core_reset);
 	if (ret) {
@@ -472,6 +477,11 @@ static int ufs_qcom_host_reset(struct ufs_hba *hba)
 				 __func__, ret);
 
 	usleep_range(1000, 1100);
+
+	if (reenable_intr) {
+		enable_irq(hba->irq);
+		hba->is_irq_enabled = true;
+	}
 
 out:
 	return ret;
@@ -534,6 +544,10 @@ static int ufs_qcom_power_up_sequence(struct ufs_hba *hba)
 
 	if (host->hw_ver.major < 0x4)
 		submode = UFS_QCOM_PHY_SUBMODE_NON_G4;
+#if defined(CONFIG_SCSI_UFSHCD_QTI)
+	if (hba->limit_phy_submode == 0)
+		submode = UFS_QCOM_PHY_SUBMODE_NON_G4;
+#endif
 	phy_set_mode_ext(phy, mode, submode);
 
 	ret = ufs_qcom_phy_power_on(hba);
@@ -1782,35 +1796,40 @@ static void ufshcd_parse_pm_levels(struct ufs_hba *hba)
 {
 	struct device *dev = hba->dev;
 	struct device_node *np = dev->of_node;
+	struct ufs_qcom_host *host = ufshcd_get_variant(hba);
 	enum ufs_pm_level rpm_lvl = UFS_PM_LVL_MAX, spm_lvl = UFS_PM_LVL_MAX;
 
 	if (!np)
 		return;
+
+	if (host->is_dt_pm_level_read)
+		return;
+
 	if (!of_property_read_u32(np, "rpm-level", &rpm_lvl) &&
 		ufshcd_is_valid_pm_lvl(rpm_lvl))
 		hba->rpm_lvl = rpm_lvl;
 	if (!of_property_read_u32(np, "spm-level", &spm_lvl) &&
 		ufshcd_is_valid_pm_lvl(spm_lvl))
 		hba->spm_lvl = spm_lvl;
+	host->is_dt_pm_level_read = true;
 }
 
 #if defined(CONFIG_SCSI_UFSHCD_QTI)
 static void ufs_qcom_override_pa_h8time(struct ufs_hba *hba)
 {
 	int ret;
-	u32 loc_tx_h8time_cap = 0;
+	u32 pa_h8time = 0;
 
-	ret = ufshcd_dme_get(hba, UIC_ARG_MIB_SEL(TX_HIBERN8TIME_CAPABILITY,
-				UIC_ARG_MPHY_TX_GEN_SEL_INDEX(0)),
-				&loc_tx_h8time_cap);
+	ret = ufshcd_dme_get(hba, UIC_ARG_MIB(PA_HIBERN8TIME),
+				&pa_h8time);
 	if (ret) {
-		dev_err(hba->dev, "Failed getting max h8 time: %d\n", ret);
+		dev_err(hba->dev, "Failed getting PA_HIBERN8TIME time: %d\n", ret);
 		return;
 	}
 
 	/* 1 implies 100 us */
 	ret = ufshcd_dme_set(hba, UIC_ARG_MIB(PA_HIBERN8TIME),
-				loc_tx_h8time_cap + 1);
+				pa_h8time + 1);
 	if (ret)
 		dev_err(hba->dev, "Failed updating PA_HIBERN8TIME: %d\n", ret);
 
@@ -1976,6 +1995,8 @@ static int ufs_qcom_setup_clocks(struct ufs_hba *hba, bool on,
 {
 	struct ufs_qcom_host *host = ufshcd_get_variant(hba);
 	int err = 0;
+	struct list_head *head = &hba->clk_list_head;
+	struct ufs_clk_info *clki;
 
 	/*
 	 * In case ufs_qcom_init() is not yet done, simply ignore.
@@ -2000,6 +2021,33 @@ static int ufs_qcom_setup_clocks(struct ufs_hba *hba, bool on,
 					dev_err(hba->dev, "%s: phy power off failed, ret = %d\n",
 							 __func__, err);
 					return err;
+				}
+			}
+
+			if (list_empty(head)) {
+				dev_err(hba->dev, "%s: clk list is empty\n", __func__);
+				return err;
+			}
+			/*
+			 * As per the latest hardware programming guide,
+			 * during Hibern8 enter with power collapse :
+			 * SW should disable HW clock control for UFS ICE
+			 * clock (GCC_UFS_ICE_CORE_CBCR.HW_CTL=0)
+			 * before ufs_ice_core_clk is turned off.
+			 * In device tree, we need to add UFS ICE clocks
+			 * in below fixed order:
+			 * clock-names =
+			 * "core_clk_ice";
+			 * "core_clk_ice_hw_ctl";
+			 * This way no extra check is required in UFS
+			 * clock enable path as clk enable order will be
+			 * already taken care in ufshcd_setup_clocks().
+			 */
+			list_for_each_entry(clki, head, list) {
+				if (!IS_ERR_OR_NULL(clki->clk) &&
+					!strcmp(clki->name, "core_clk_ice_hw_ctl")) {
+					clk_disable_unprepare(clki->clk);
+					clki->enabled = on;
 				}
 			}
 		}
@@ -2393,13 +2441,13 @@ ufs_qcom_ioctl(struct scsi_device *dev, unsigned int cmd, void __user *buffer)
 	int err = 0;
 
 	BUG_ON(!hba);
-	if (!buffer) {
-		dev_err(hba->dev, "%s: User buffer is NULL!\n", __func__);
-		return -EINVAL;
-	}
 
 	switch (cmd) {
 	case UFS_IOCTL_QUERY:
+		if (!buffer) {
+			dev_err(hba->dev, "%s: User buffer is NULL!\n", __func__);
+			return -EINVAL;
+		}
 		pm_runtime_get_sync(hba->dev);
 		err = ufs_qcom_query_ioctl(hba,
 					   ufshcd_scsi_to_upiu_lun(dev->lun),
@@ -2483,6 +2531,9 @@ static void ufs_qcom_qos(struct ufs_hba *hba, int tag, bool is_scsi_cmd)
 	if (cpu < 0)
 		return;
 	qcg = cpu_to_group(host->ufs_qos, cpu);
+	if (!qcg)
+		return;
+
 	if (qcg->voted) {
 		dev_dbg(qcg->host->hba->dev, "%s: qcg: 0x%08x | Mask: 0x%08x - Already voted - return\n",
 			__func__, qcg, qcg->mask);
@@ -2755,12 +2806,10 @@ static int ufs_qcom_init(struct ufs_hba *hba)
 	}
 
 	/* update phy revision information before calling phy_init() */
-	/*
-	 * FIXME:
-	 * ufs_qcom_phy_save_controller_version(host->generic_phy,
-	 *	host->hw_ver.major, host->hw_ver.minor, host->hw_ver.step);
-	 */
-	err = ufs_qcom_parse_reg_info(host, "qcom,vddp-ref-clk",
+	ufs_qcom_phy_save_controller_version(host->generic_phy,
+			host->hw_ver.major, host->hw_ver.minor, host->hw_ver.step);
+
+	 err = ufs_qcom_parse_reg_info(host, "qcom,vddp-ref-clk",
 				      &host->vddp_ref_clk);
 
 	err = phy_init(host->generic_phy);
@@ -3373,6 +3422,9 @@ static void ufs_qcom_parse_limits(struct ufs_qcom_host *host)
 	of_property_read_u32(np, "limit-rx-pwm-gear", &host->limit_rx_pwm_gear);
 	of_property_read_u32(np, "limit-rate", &host->limit_rate);
 	of_property_read_u32(np, "limit-phy-submode", &host->limit_phy_submode);
+#if defined(CONFIG_SCSI_UFSHCD_QTI)
+	host->hba->limit_phy_submode = host->limit_phy_submode;
+#endif
 }
 
 /*

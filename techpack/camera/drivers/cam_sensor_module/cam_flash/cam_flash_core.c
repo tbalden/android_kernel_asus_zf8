@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/module.h>
@@ -19,11 +19,6 @@ static int asus_bat_low = 0;
 static int asus_flash_state = 0;
 static struct cam_flash_ctrl *asus_fctrl;
 //ASUS_BSP --- Shianliang add low battery checking
-#endif
-
-
-#ifdef CONFIG_UCI
-#include <linux/notification/notification.h>
 #endif
 
 int cam_flash_led_prepare(struct led_trigger *trigger, int options,
@@ -495,9 +490,6 @@ int cam_flash_off(struct cam_flash_ctrl *flash_ctrl)
 	asus_flash_state = 0; //ASUS_BSP +++ Shianliang add low battery checking
 	#endif
 
-#if CONFIG_UCI
-	ntf_set_cam_flashlight(false);
-#endif
 	return 0;
 }
 
@@ -530,9 +522,6 @@ static int cam_flash_low(
 		CAM_ERR(CAM_FLASH, "Fire Torch success: rc =%d", rc);
         }
 
-#if CONFIG_UCI
-	ntf_set_cam_flashlight(true);
-#endif
 	return rc;
 }
 
@@ -562,9 +551,6 @@ static int cam_flash_high(
 	if (rc)
 		CAM_ERR(CAM_FLASH, "Fire Flash Failed: %d", rc);
 
-#if CONFIG_UCI
-	ntf_set_cam_flashlight(true);
-#endif
 	return rc;
 }
 
@@ -1595,9 +1581,12 @@ int cam_flash_pmic_pkt_parser(struct cam_flash_ctrl *fctrl, void *arg)
 
 			CAM_DBG(CAM_FLASH,
 				"FLASH_CMD_TYPE op:%d", flash_data->opcode);
+			if (flash_data->opcode == CAMERA_SENSOR_FLASH_OP_OFF)
+				add_req.skip_before_applying |= SKIP_NEXT_FRAME;
 
 			if (flash_data->opcode ==
 				CAMERA_SENSOR_FLASH_OP_FIREDURATION) {
+				add_req.trigger_eof = true;
 				/* Active time for the preflash */
 				flash_data->flash_active_time_ms =
 				(flash_operation_info->time_on_duration_ns)
@@ -1794,13 +1783,14 @@ int cam_flash_pmic_pkt_parser(struct cam_flash_ctrl *fctrl, void *arg)
 
 		if ((csl_packet->header.op_code & 0xFFFFF) ==
 			CAM_FLASH_PACKET_OPCODE_SET_OPS) {
-			add_req.skip_before_applying |= SKIP_NEXT_FRAME;
-			add_req.trigger_eof = true;
-
 			if ((flash_data->opcode !=
 				CAMERA_SENSOR_FLASH_OP_FIREDURATION))
 				add_req.skip_before_applying |= 1;
-			else
+			else if (flash_data->opcode ==
+				CAMERA_SENSOR_FLASH_OP_FIREDURATION) {
+				CAM_DBG(CAM_FLASH, "Trigger eof is set for request ");
+				add_req.trigger_eof = true;
+			} else
 				add_req.skip_before_applying = 0;
 		} else {
 			add_req.skip_before_applying = 0;

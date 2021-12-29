@@ -1245,7 +1245,7 @@ static struct psensor_hw psensor_hw_vcnl36863 = {
 	.proximity_crosstalk_default = VCNL36863_PROXIMITY_INF_DEFAULT,
 	.proximity_autok_min = VCNL36863_PROXIMITY_AUTOK_MIN,
 	.proximity_autok_max = VCNL36863_PROXIMITY_AUTOK_MAX,
-	
+
 	.proximity_hw_turn_onoff = vcnl36863_proximity_hw_turn_onoff,
 	.proximity_hw_interrupt_onoff = vcnl36863_proximity_hw_interrupt_onoff,
 	.proximity_hw_get_adc = vcnl36863_proximity_hw_get_adc,
@@ -1257,7 +1257,7 @@ static struct psensor_hw psensor_hw_vcnl36863 = {
 static struct lsensor_hw lsensor_hw_vcnl36863 = {
 	.light_max_threshold = VCNL36863_LIGHT_MAX_THRESHOLD,
 	.light_calibration_default = VCNL36863_LIGHT_CALIBRATION_DEFAULT,
-		
+
 	.light_hw_turn_onoff = vcnl36863_light_hw_turn_onoff,
 	.light_hw_interrupt_onoff = vcnl36863_light_hw_interrupt_onoff,
 	.light_hw_get_adc = vcnl36863_frgb_hw_get_green,

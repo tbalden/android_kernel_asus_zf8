@@ -264,11 +264,7 @@ static ssize_t  ATT_light_show_allreg(struct device *dev,
 		return sprintf(buf, "NOT SUPPORT\n");
 	}
 	log("print all reg");
-#ifdef CONFIG_TMD2755_FLAG
 	return g_light_ATTR->ATTR_Extension->light_show_allreg(dev, attr, buf);
-#else
-	return g_light_ATTR->ATTR_Extension->light_show_allreg();
-#endif
 }
 
 static ssize_t  ATT_light_show_sensitivity(struct device *dev, 

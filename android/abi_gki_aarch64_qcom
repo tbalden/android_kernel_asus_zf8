@@ -164,6 +164,7 @@
   cfg80211_scan_done
   cfg80211_sched_scan_results
   __cfg80211_send_event_skb
+  cfg80211_stop_iface
   cfg80211_tdls_oper_request
   cfg80211_unlink_bss
   cfg80211_update_owe_info_event
@@ -634,6 +635,8 @@
   drm_atomic_helper_wait_for_vblanks
   drm_atomic_private_obj_init
   drm_atomic_set_crtc_for_connector
+  drm_atomic_set_crtc_for_plane
+  drm_atomic_set_fb_for_plane
   drm_atomic_set_fence_for_plane
   drm_atomic_set_mode_for_crtc
   drm_atomic_state_alloc
@@ -662,16 +665,23 @@
   drm_connector_list_iter_begin
   drm_connector_list_iter_end
   drm_connector_list_iter_next
+  drm_connector_list_update
   drm_connector_register
+  drm_connector_set_tile_property
   drm_connector_unregister
   drm_connector_update_edid_property
   drm_crtc_cleanup
+  drm_crtc_from_index
   drm_crtc_handle_vblank
   drm_crtc_init_with_planes
   drm_crtc_send_vblank_event
+  drm_crtc_set_max_vblank_count
+  drm_crtc_vblank_get
   drm_crtc_vblank_off
   drm_crtc_vblank_on
+  drm_crtc_vblank_put
   drm_crtc_vblank_reset
+  drm_crtc_vblank_waitqueue
   drm_crtc_wait_one_vblank
   drm_cvt_mode
   drm_dbg
@@ -709,8 +719,10 @@
   drm_dp_link_train_channel_eq_delay
   drm_dp_link_train_clock_recovery_delay
   drm_dp_mst_allocate_vcpi
+  drm_dp_mst_atomic_check
   drm_dp_mst_deallocate_vcpi
   drm_dp_mst_detect_port
+  drm_dp_mst_dump_topology
   drm_dp_mst_get_edid
   drm_dp_mst_get_port_malloc
   drm_dp_mst_hpd_irq
@@ -723,11 +735,13 @@
   drm_dp_update_payload_part1
   drm_dp_update_payload_part2
   drm_edid_duplicate
+  drm_edid_is_valid
   drm_encoder_cleanup
   drm_encoder_init
   drm_err
   drm_event_reserve_init_locked
   drm_format_info
+  drm_framebuffer_cleanup
   drm_framebuffer_init
   drm_framebuffer_lookup
   drm_framebuffer_remove
@@ -763,11 +777,14 @@
   drm_ioctl
   drm_irq_install
   drm_irq_uninstall
+  drm_is_current_master
   drm_kms_helper_hotplug_event
   drm_kms_helper_poll_disable
   drm_kms_helper_poll_enable
   drm_kms_helper_poll_fini
   drm_kms_helper_poll_init
+  drm_master_get
+  drm_master_put
   drm_match_cea_mode
   drm_mm_init
   drm_mm_insert_node_in_range
@@ -781,13 +798,17 @@
   drm_mode_copy
   drm_mode_create
   drm_mode_create_dp_colorspace_property
+  drm_mode_create_tile_group
   drm_mode_debug_printmodeline
+  drm_mode_destroy
   drm_mode_duplicate
   drm_mode_equal
+  drm_mode_get_tile_group
   drm_mode_object_find
   drm_mode_object_get
   drm_mode_object_put
   drm_mode_probed_add
+  drm_mode_prune_invalid
   drm_modeset_acquire_fini
   drm_modeset_acquire_init
   drm_modeset_backoff
@@ -798,6 +819,7 @@
   drm_modeset_lock_all_ctx
   drm_mode_set_name
   drm_modeset_unlock_all
+  drm_mode_sort
   drm_mode_vrefresh
   drm_object_attach_property
   drm_object_property_set_value
@@ -826,6 +848,7 @@
   drm_property_lookup_blob
   drm_put_dev
   drm_read
+  drm_rect_rotate
   drm_release
   drm_rotation_simplify
   drm_send_event_locked
@@ -868,6 +891,8 @@
   fd_install
   fget
   file_path
+  filp_open
+  filp_close
   find_last_bit
   find_next_bit
   find_next_zero_bit
@@ -901,6 +926,7 @@
   fsl8250_handle_irq
   fs_kobj
   fsstack_copy_attr_all
+  full_name_hash
   fwnode_connection_find_match
   fwnode_get_parent
   fwnode_handle_put
@@ -1034,6 +1060,7 @@
   __hwspin_unlock
   hypervisor_kobj
   i2c_add_adapter
+  i2c_add_numbered_adapter
   i2c_del_adapter
   i2c_del_driver
   i2c_get_dma_safe_msg_buf
@@ -1197,6 +1224,8 @@
   irq_set_chained_handler_and_data
   irq_set_chip_and_handler_name
   irq_set_chip_data
+  __irq_set_handler
+  irq_set_handler_data
   irq_set_irqchip_state
   irq_set_irq_type
   irq_set_irq_wake
@@ -1225,6 +1254,10 @@
   kern_path
   keyslot_manager_create
   keyslot_manager_private
+  keyslot_manager_set_max_dun_bytes
+  keyslot_manager_reprogram_all_keys
+  keyslot_manager_destroy
+  bio_crypt_should_process
   __kfifo_in
   __kfifo_out
   kfree
@@ -1454,6 +1487,7 @@
   netlink_unicast
   net_ratelimit
   new_inode
+  nf_conntrack_destroy
   nla_memcpy
   __nla_parse
   nla_put_64bit
@@ -1522,12 +1556,15 @@
   of_get_named_gpio_flags
   of_get_next_available_child
   of_get_next_child
+  of_get_next_parent
   of_get_parent
   of_get_property
   of_get_regulator_init_data
   of_graph_get_next_endpoint
   of_graph_get_remote_node
   of_graph_get_remote_port_parent
+  of_graph_get_remote_port
+  of_graph_get_endpoint_by_regs
   of_graph_parse_endpoint
   of_hwspin_lock_get_id
   of_icc_get
@@ -1562,6 +1599,7 @@
   of_property_read_u64_index
   of_property_read_variable_u16_array
   of_property_read_variable_u32_array
+  of_property_read_variable_u64_array
   of_property_read_variable_u8_array
   of_prop_next_string
   of_prop_next_u32
@@ -1648,6 +1686,7 @@
   pci_walk_bus
   pci_write_config_dword
   pci_write_config_word
+  pci_dev_present
   PDE_DATA
   __per_cpu_offset
   perf_trace_buf_alloc
@@ -1728,6 +1767,7 @@
   __pm_relax
   pm_relax
   pm_runtime_allow
+  pm_runtime_autosuspend_expiration
   pm_runtime_barrier
   __pm_runtime_disable
   pm_runtime_enable
@@ -1875,6 +1915,8 @@
   register_shrinker
   register_syscore_ops
   register_sysctl_table
+  register_virtio_device
+  register_virtio_driver
   regmap_bulk_read
   regmap_bulk_write
   regmap_field_read
@@ -2380,6 +2422,7 @@
   trace_event_reg
   trace_handle_return
   __tracepoint_dma_fence_emit
+  __tracepoint_gpu_mem_total
   __tracepoint_xdp_exception
   trace_print_array_seq
   trace_print_flags_seq
@@ -2478,6 +2521,8 @@
   unregister_shrinker
   unregister_syscore_ops
   unregister_sysctl_table
+  unregister_virtio_device
+  unregister_virtio_driver
   up
   update_devfreq
   up_read
@@ -2734,6 +2779,29 @@
   video_ioctl2
   __video_register_device
   video_unregister_device
+  virtio_check_driver_offered_feature
+  virtio_config_changed
+  virtio_max_dma_size
+  virtqueue_add_inbuf
+  virtqueue_add_inbuf_ctx
+  virtqueue_add_outbuf
+  virtqueue_add_sgs
+  virtqueue_detach_unused_buf
+  virtqueue_disable_cb
+  virtqueue_enable_cb
+  virtqueue_enable_cb_delayed
+  virtqueue_enable_cb_prepare
+  virtqueue_get_avail_addr
+  virtqueue_get_buf
+  virtqueue_get_buf_ctx
+  virtqueue_get_desc_addr
+  virtqueue_get_used_addr
+  virtqueue_get_vring_size
+  virtqueue_is_broken
+  virtqueue_kick
+  virtqueue_kick_prepare
+  virtqueue_notify
+  virtqueue_poll
   vmalloc
   vmalloc_to_page
   vmalloc_user
@@ -2747,6 +2815,10 @@
   vm_map_ram
   vm_unmap_ram
   vprintk
+  vring_create_virtqueue
+  vring_del_virtqueue
+  vring_interrupt
+  vring_transport_features
   vscnprintf
   vsnprintf
   vunmap

@@ -41,7 +41,7 @@
 /******************************/
 /* Debug and Log System */
 /*****************************/
-#define MODULE_NAME			"ASH_GPIO"
+#define MODULE_NAME			"ASH_tmd2755"
 #define SENSOR_TYPE_NAME		"ALSPS"
 
 #undef dbg
@@ -50,7 +50,7 @@
 #else
 	#define dbg(fmt, args...)
 #endif
-#define log(fmt, args...) printk(KERN_INFO "[%s][%s][%s]"fmt,MODULE_NAME,SENSOR_TYPE_NAME,__func__,##args)
+#define log(fmt, args...) printk(KERN_INFO "[%s]"fmt,MODULE_NAME,##args)
 #define err(fmt, args...) printk(KERN_ERR "[%s][%s]"fmt,MODULE_NAME,SENSOR_TYPE_NAME,##args)
 
 extern struct tmd2755_chip *g_tmd2755_chip;
@@ -442,7 +442,7 @@ int tmd2755_configure_als_mode(struct tmd2755_chip *chip, u8 state)
 
 	if (state) { /* Enable ALS */
 		g_tmd2755_status_param.log_first_evt = true;
-		dev_info(&chip->client->dev, "%*.*s():%*d --> Enabling and Configuring ALS\n",
+		dev_dbg(&chip->client->dev, "%*.*s():%*d --> Enabling and Configuring ALS\n",
 			MIN_KERNEL_LOG_LEN, MAX_KERNEL_LOG_LEN, __func__, LINE_NUM_KERNEL_LOG_LEN, __LINE__);
 
 		chip->shadow[TMD2755_REG_ATIME] = chip->params.als_time;

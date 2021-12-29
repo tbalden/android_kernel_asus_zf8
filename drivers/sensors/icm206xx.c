@@ -2419,8 +2419,7 @@ static int asusIcm206xxPolling_proc_open(struct inode *inode, struct  file *file
 static ssize_t asusIcm206xxPolling_proc_write(struct file *filp, const char __user *buff,
 		size_t len, loff_t *data)
 {
-	int val;
-	char messages[256];
+	char messages[256] = "";
 	if (!g_icm206xx_sensor) {
 		icm_errmsg("null icm_sensor!");
 		return len;
@@ -2433,13 +2432,12 @@ static ssize_t asusIcm206xxPolling_proc_write(struct file *filp, const char __us
 		return -EFAULT;
 	}
 
-	val = (int)simple_strtol(messages, NULL, 10);
-	if (val == 0) {
-		g_icm206xx_sensor->use_poll = false;
-	} else{
+	if (messages[0] == '1') {
 		g_icm206xx_sensor->use_poll = true;
+	} else{
+		g_icm206xx_sensor->use_poll = false;
 	}
-	icm_dbgmsg("%d\n", val);
+	icm_dbgmsg("%s\n", messages);
 	return len;
 }
 static struct proc_dir_entry * create_asusIcm206xxPolling_proc_file(void)
@@ -2569,8 +2567,7 @@ static int asusIcm206xxDebug_proc_open(struct inode *inode, struct  file *file)
 static ssize_t asusIcm206xxDebug_proc_write(struct file *filp, const char __user *buff,
 		size_t len, loff_t *data)
 {
-	int val;
-	char messages[256];
+	char messages[256] = "";
 	if (len > 256) {
 		len = 256;
 	}
@@ -2578,13 +2575,12 @@ static ssize_t asusIcm206xxDebug_proc_write(struct file *filp, const char __user
 		return -EFAULT;
 	}
 
-	val = (int)simple_strtol(messages, NULL, 10);
-	if (val == 0) {
-		g_icm_debugMode = false;
-	} else{
+	if (messages[0] == '1') {
 		g_icm_debugMode = true;
+	} else{
+		g_icm_debugMode = false;
 	}
-	icm_dbgmsg("%d\n", val);
+	icm_dbgmsg("%s\n", messages);
 	return len;
 }
 static struct proc_dir_entry * create_asusIcm206xxDebug_proc_file(void)
@@ -3076,6 +3072,7 @@ void report_wq(struct work_struct *work)
 	}
 	schedule_delayed_work(&g_icm_work_report, HZ * g_icm_next_report_time_s);
 }
+#if 0
 extern int asus_get_se_proto(struct spi_device *spi);
 static bool icm_spi_check_bus(struct spi_device *spi)
 {
@@ -3086,6 +3083,7 @@ static bool icm_spi_check_bus(struct spi_device *spi)
 	}
 	return true;
 }
+#endif
 static bool icm_i2c_check_bus(struct i2c_client *a_client)
 {
 	return true;
@@ -3332,10 +3330,12 @@ static int icm_i2c_probe(struct i2c_client *a_client,
 }
 static int icm_spi_probe(struct spi_device *a_pdev)
 {
+#if 0
 	if (!icm_spi_check_bus(a_pdev)) {
 		icm_dbgmsg("invalid bus! might need to modify trustzone.");
 		return -1;
 	}
+#endif
 	return icm_probe(NULL, a_pdev, &a_pdev->dev);
 }
 /*
@@ -3650,8 +3650,19 @@ static struct i2c_driver icm_i2c_driver = {
 	},
 };
 
-module_spi_driver(icm_spi_driver);
-module_i2c_driver(icm_i2c_driver);
+static int __init icm_driver_init(void)
+{
+	i2c_add_driver(&icm_i2c_driver);
+	spi_register_driver(&icm_spi_driver);
+	return 0;
+}
+static void __exit icm_driver_exit(void)
+{
+	i2c_del_driver(&icm_i2c_driver);
+	spi_unregister_driver(&icm_spi_driver);
+}
+module_init(icm_driver_init);
+module_exit(icm_driver_exit);
 
 MODULE_DESCRIPTION("ICM Tri-axis gyroscope driver");
 MODULE_LICENSE("GPL v2");

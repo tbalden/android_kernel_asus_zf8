@@ -136,21 +136,19 @@ static bool get_chip_id(struct fts_ts_data *ts_data)
 {
     int ret = 0;
     int i = 0;
-    u8 reg_value = 0;
-    u8 reg_addr = 0;
+    u8 idh = 0;
     u8 chip_id = ts_data->ic_info.ids.chip_idh;
 
     for (i = 0; i < 3; i++) {
-        reg_addr = FTS_REG_CHIP_ID;
-        ret = fts_read(&reg_addr, 1, &reg_value, 1);
+        ret = fts_read_reg(FTS_REG_CHIP_ID, &idh);
         if (ret < 0) {
             FTS_ERROR("read chip id fail,ret:%d", ret);
             fts_esdcheck_data.nack_cnt++;
         } else {
-            if (reg_value == chip_id) {
+            if ((idh == chip_id) || (fts_check_cid(ts_data, idh) == 0)) {
                 break;
             } else {
-                FTS_DEBUG("read chip_id:%x,retry:%d", reg_value, i);
+                FTS_DEBUG("read chip_id:%x,retry:%d", idh, i);
                 fts_esdcheck_data.dataerror_cnt++;
             }
         }

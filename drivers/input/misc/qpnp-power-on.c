@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2021, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/debugfs.h>
@@ -14,6 +14,7 @@
 #include <linux/log2.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
+#include <linux/of_address.h>
 #include <linux/of_device.h>
 #include <linux/of.h>
 #include <linux/platform_device.h>
@@ -28,6 +29,7 @@
 #ifdef CONFIG_MACH_ASUS
 // ASUS_BSP_joe1++
 #include <linux/ktime.h>
+#include <linux/device.h>
 // ASUS_BSP_joe1--
 
 /*ASUS BSP Porting Debug*/
@@ -45,7 +47,6 @@ static int voldown_key_3s_running = 0;
 
 static struct work_struct pwr_press_work;
 static struct work_struct volDown_press_work;
-
 // ASUS_BSP ---
 #endif
 
@@ -83,6 +84,7 @@ enum qpnp_pon_version {
 #define QPNP_PON_RT_STS(pon)			((pon)->base + 0x10)
 #define QPNP_PON_PULL_CTL(pon)			((pon)->base + 0x70)
 #define QPNP_PON_DBC_CTL(pon)			((pon)->base + 0x71)
+#define QPNP_PON_PBS_DBC_CTL(pon)		((pon)->pbs_base + 0x71)
 
 /* PON/RESET sources register addresses */
 #define QPNP_PON_REASON1(pon) \
@@ -230,6 +232,7 @@ struct qpnp_pon {
 	struct delayed_work	bark_work;
 	struct dentry		*debugfs;
 	u16			base;
+	u16			pbs_base;
 	u8			subtype;
 	u8			pon_ver;
 	u8			warm_reset_reason1;
@@ -255,6 +258,7 @@ struct qpnp_pon {
 	bool			kpdpwr_dbc_enable;
 	bool			resin_pon_reset;
 	ktime_t			kpdpwr_last_release_time;
+	bool			legacy_hard_reset_offset;
 };
 
 static struct qpnp_pon *sys_reset_dev;
@@ -269,6 +273,7 @@ static u32 s1_delay[PON_S1_COUNT_MAX + 1] = {
 #ifdef CONFIG_MACH_ASUS
 static u32 gresin_irq = 0;
 static bool gresin_irq_enable = false;
+extern bool g_Charger_mode;
 #endif
 
 static const char * const qpnp_pon_reason[] = {
@@ -333,6 +338,49 @@ static const char * const qpnp_poff_reason[] = {
 };
 
 #ifdef CONFIG_MACH_ASUS
+
+enum {
+	WAKE_LOCK_SUSPEND, /* Prevent suspend */
+	WAKE_LOCK_TYPE_COUNT
+};
+
+struct wake_lock {
+	struct wakeup_source *ws;
+};
+
+struct wake_lock cos_3s_wake_lock;
+
+static inline void wake_lock_init(struct wake_lock *lock, struct device *dev,
+				  const char *name)
+{
+	lock->ws = wakeup_source_register(dev, name);
+}
+
+static inline void wake_lock_destroy(struct wake_lock *lock)
+{
+	wakeup_source_unregister(lock->ws);
+}
+
+static inline void wake_lock(struct wake_lock *lock)
+{
+	__pm_stay_awake(lock->ws);
+}
+
+static inline void wake_lock_timeout(struct wake_lock *lock, long timeout)
+{
+	__pm_wakeup_event(lock->ws, jiffies_to_msecs(timeout));
+}
+
+static inline void wake_unlock(struct wake_lock *lock)
+{
+	__pm_relax(lock->ws);
+}
+
+static inline int wake_lock_active(struct wake_lock *lock)
+{
+	return lock->ws->active;
+}
+
 int asus_enable_resin_irq_wake(bool en)
 {
 	if(en && gresin_irq_enable == false) {
@@ -422,7 +470,7 @@ int qpnp_pon_set_restart_reason(enum pon_restart_reason reason)
 	if (!pon->store_hard_reset_reason)
 		return 0;
 
-	if (is_pon_gen2(pon) || is_pon_gen3(pon))
+	if ((is_pon_gen2(pon) || is_pon_gen3(pon)) && !pon->legacy_hard_reset_offset)
 		rc = qpnp_pon_masked_write(pon, QPNP_PON_SOFT_RB_SPARE(pon),
 					   GENMASK(7, 1), (reason << 1));
 	else
@@ -715,9 +763,14 @@ static int qpnp_pon_get_dbc(struct qpnp_pon *pon, u32 *delay)
 	int rc;
 	unsigned int val;
 
-	rc = qpnp_pon_read(pon, QPNP_PON_DBC_CTL(pon), &val);
+	if (is_pon_gen3(pon) && pon->pbs_base)
+		rc = qpnp_pon_read(pon, QPNP_PON_PBS_DBC_CTL(pon), &val);
+	else
+		rc = qpnp_pon_read(pon, QPNP_PON_DBC_CTL(pon), &val);
+
 	if (rc)
 		return rc;
+
 	val &= QPNP_PON_DBC_DELAY_MASK(pon);
 
 	if (is_pon_gen2(pon) || is_pon_gen3(pon))
@@ -1325,6 +1378,18 @@ static int qpnp_pon_input_dispatch(struct qpnp_pon *pon, u32 pon_type)
 
 #ifdef CONFIG_MACH_ASUS
 	printk("[keypad][qpnp-power-on.c] keycode=%d, state=%s\n", cfg->key_code, key_status?"press":"release");//ASUS BSP +++
+	if(cfg->key_code == 116 && g_Charger_mode) {
+                if(key_status) {
+			printk("[keypad][qpnp-power-on.c] COS Mode Listen Power key 3s for reboot device!\n");
+			wake_lock_timeout(&cos_3s_wake_lock, msecs_to_jiffies(9000));
+			//mod_timer(&pwr_press_timer, jiffies + msecs_to_jiffies(3000));
+		}
+		/*else {
+			power_key_3s_running = 0;
+			del_timer(&pwr_press_timer);	
+		}*/
+	}
+
 	if(cfg->key_code == 114) { //volume down
 		if (vol_up_press) {
 			if (key_status > 0)
@@ -2799,7 +2864,8 @@ static int qpnp_pon_probe(struct platform_device *pdev)
 	struct device_node *node;
 	struct qpnp_pon *pon;
 	unsigned long flags;
-	u32 base, delay;
+	u32 delay;
+	const __be32 *addr;
 	bool sys_reset, modem_reset;
 	int rc;
 
@@ -2814,12 +2880,16 @@ static int qpnp_pon_probe(struct platform_device *pdev)
 		return -ENODEV;
 	}
 
-	rc = of_property_read_u32(dev->of_node, "reg", &base);
-	if (rc < 0) {
-		dev_err(dev, "reg property missing, rc=%d\n", rc);
-		return rc;
+	addr = of_get_address(dev->of_node, 0, NULL, NULL);
+	if (!addr) {
+		dev_err(dev, "reg property missing\n");
+		return -EINVAL;
 	}
-	pon->base = base;
+	pon->base = be32_to_cpu(*addr);
+
+	addr = of_get_address(dev->of_node, 1, NULL, NULL);
+	if (addr)
+		pon->pbs_base = be32_to_cpu(*addr);
 
 	sys_reset = of_property_read_bool(dev->of_node, "qcom,system-reset");
 	if (sys_reset && sys_reset_dev) {
@@ -2891,6 +2961,9 @@ static int qpnp_pon_probe(struct platform_device *pdev)
 	pon->store_hard_reset_reason = of_property_read_bool(dev->of_node,
 					"qcom,store-hard-reset-reason");
 
+	pon->legacy_hard_reset_offset = of_property_read_bool(pdev->dev.of_node,
+					"qcom,use-legacy-hard-reset-offset");
+
 	if (of_property_read_bool(dev->of_node, "qcom,secondary-pon-reset")) {
 		if (sys_reset) {
 			dev_err(dev, "qcom,system-reset property shouldn't be used along with qcom,secondary-pon-reset property\n");
@@ -2926,6 +2999,7 @@ static int qpnp_pon_probe(struct platform_device *pdev)
 
 #ifdef CONFIG_MACH_ASUS
 	asus_enable_resin_irq_wake(0);
+	wake_lock_init(&cos_3s_wake_lock, dev, "cos_3s_wake_lock");
 #endif
 	return 0;
 }
@@ -2935,6 +3009,9 @@ static int qpnp_pon_remove(struct platform_device *pdev)
 	struct qpnp_pon *pon = platform_get_drvdata(pdev);
 	unsigned long flags;
 
+#ifdef CONFIG_MACH_ASUS
+	wake_lock_destroy(&cos_3s_wake_lock);
+#endif
 	device_remove_file(&pdev->dev, &dev_attr_debounce_us);
 
 	cancel_delayed_work_sync(&pon->bark_work);
@@ -2975,6 +3052,11 @@ void pwr_press_workqueue(struct work_struct *work)
 	
 	if(power_key_3s_running  == 0){
 		power_key_3s_running = 1;
+		/*if(g_Charger_mode) {
+			printk("[Reboot] Already Trigger COS PowerKey Long press 3s Reboot device!!!\n");
+			do_msm_restart2(NULL);
+		}*/
+
 		if (voldown_key_3s_running ) {
 				schedule_work(&__slowlog_work);	
 		}

@@ -476,7 +476,7 @@ int cam_isp_add_io_buffers(
 	struct cam_isp_hw_get_cmd_update    update_buf;
 	struct cam_isp_hw_get_wm_update     wm_update;
 	struct cam_isp_hw_get_wm_update     bus_rd_update;
-	struct cam_hw_fence_map_entry      *out_map_entries;
+	struct cam_hw_fence_map_entry      *out_map_entries = NULL;
 	struct cam_hw_fence_map_entry      *in_map_entries;
 	struct cam_isp_hw_get_cmd_update    secure_mode;
 	uint32_t                            kmd_buf_remain_size;
@@ -700,6 +700,7 @@ int cam_isp_add_io_buffers(
 			wm_update.num_buf   = plane_id;
 			wm_update.io_cfg    = &io_cfg[i];
 			wm_update.frame_header = 0;
+			wm_update.fh_enabled = false;
 
 			for (plane_id = 0; plane_id < CAM_PACKET_MAX_PLANES;
 				plane_id++)
@@ -709,14 +710,8 @@ int cam_isp_add_io_buffers(
 			if ((frame_header_info->frame_header_enable) &&
 				!(frame_header_info->frame_header_res_id)) {
 				wm_update.frame_header = iova_addr;
-				frame_header_info->frame_header_res_id =
-					res->res_id;
 				wm_update.local_id =
 					prepare->packet->header.request_id;
-				CAM_DBG(CAM_ISP,
-					"Frame header enabled for res: 0x%x iova: %pK",
-					frame_header_info->frame_header_res_id,
-					wm_update.frame_header);
 			}
 
 			update_buf.cmd.size = kmd_buf_remain_size;
@@ -736,8 +731,23 @@ int cam_isp_add_io_buffers(
 				rc = -ENOMEM;
 				return rc;
 			}
+
+			if (wm_update.fh_enabled) {
+				frame_header_info->frame_header_res_id =
+					res->res_id;
+				CAM_DBG(CAM_ISP,
+					"Frame header enabled for res: 0x%x iova: %pK",
+					frame_header_info->frame_header_res_id,
+					wm_update.frame_header);
+			}
+
 			io_cfg_used_bytes += update_buf.cmd.used_bytes;
 
+			if (!out_map_entries) {
+				CAM_ERR(CAM_ISP, "out_map_entries is NULL");
+				rc = -EINVAL;
+				return rc;
+			}
 
 			image_buf_addr =
 				out_map_entries->image_buf_addr;

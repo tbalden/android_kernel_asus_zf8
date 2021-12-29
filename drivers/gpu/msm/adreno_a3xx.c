@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2021, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/clk/qcom.h>
@@ -149,7 +149,7 @@ static int _a3xx_pwron_fixup(struct adreno_device *adreno_dev)
 		return 0;
 
 	adreno_dev->pwron_fixup = kgsl_allocate_global(KGSL_DEVICE(adreno_dev),
-		PAGE_SIZE, KGSL_MEMFLAGS_GPUREADONLY, 0, "pwron_fixup");
+		PAGE_SIZE, 0, KGSL_MEMFLAGS_GPUREADONLY, 0, "pwron_fixup");
 
 	if (IS_ERR(adreno_dev->pwron_fixup))
 		return PTR_ERR(adreno_dev->pwron_fixup);
@@ -793,7 +793,7 @@ static void a3xx_err_callback(struct adreno_device *adreno_dev, int bit)
 	 (1 << A3XX_INT_CP_AHB_ERROR_HALT) |     \
 	 (1 << A3XX_INT_UCHE_OOB_ACCESS))
 
-static struct adreno_irq_funcs a3xx_irq_funcs[32] = {
+static const struct adreno_irq_funcs a3xx_irq_funcs[32] = {
 	ADRENO_IRQ_CALLBACK(NULL),                    /* 0 - RBBM_GPU_IDLE */
 	ADRENO_IRQ_CALLBACK(a3xx_err_callback),  /* 1 - RBBM_AHB_ERROR */
 	ADRENO_IRQ_CALLBACK(NULL),  /* 2 - RBBM_REG_TIMEOUT */
@@ -857,8 +857,14 @@ static struct {
 	{ A3XX_CP_PROTECT_REG_0 + 13, 0x0cc0, 0 },
 	/* VBIF */
 	{ A3XX_CP_PROTECT_REG_0 + 14, 0x3000, 6 },
-	/* SMMU */
-	{ A3XX_CP_PROTECT_REG_0 + 15, 0xa000, 12 },
+	/*
+	 * SMMU
+	 * For A3xx, base offset for smmu region is 0xa000 and length is
+	 * 0x1000 bytes. Offset must be in dword and length of the block
+	 * must be ilog2(dword length).
+	 * 0xa000 >> 2 = 0x2800, ilog2(0x1000 >> 2) = 10.
+	 */
+	{ A3XX_CP_PROTECT_REG_0 + 15, 0x2800, 10 },
 	/* There are no remaining protected mode registers for a3xx */
 };
 
@@ -1241,7 +1247,7 @@ static int a3xx_clear_pending_transactions(struct adreno_device *adreno_dev)
 	return ret;
 }
 
-struct adreno_gpudev adreno_a3xx_gpudev = {
+const struct adreno_gpudev adreno_a3xx_gpudev = {
 	.reg_offsets = a3xx_register_offsets,
 	.ft_perf_counters = a3xx_ft_perf_counters,
 	.ft_perf_counters_count = ARRAY_SIZE(a3xx_ft_perf_counters),

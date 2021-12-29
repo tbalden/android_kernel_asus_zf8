@@ -43,7 +43,7 @@
 /******************************/
 /* Debug and Log System */
 /*****************************/
-#define MODULE_NAME			"ASH_GPIO"
+#define MODULE_NAME			"ASH_tmd2755"
 #define SENSOR_TYPE_NAME		"ALSPS"
 
 #undef dbg
@@ -52,7 +52,7 @@
 #else
 	#define dbg(fmt, args...)
 #endif
-#define log(fmt, args...) printk(KERN_INFO "[%s][%s][%s]"fmt,MODULE_NAME,SENSOR_TYPE_NAME,__func__,##args)
+#define log(fmt, args...) printk(KERN_INFO "[%s]"fmt,MODULE_NAME,##args)
 #define err(fmt, args...) printk(KERN_ERR "[%s][%s]"fmt,MODULE_NAME,SENSOR_TYPE_NAME,##args)
 
 extern struct tmd2755_chip *g_tmd2755_chip;
@@ -162,6 +162,10 @@ static void tmd2755_get_prox(struct tmd2755_chip *chip)
 		log("Lose condition, raw=%d, min=%d, max=%d", chip->prox_info.raw, 
 			chip->params.prox_thresh_min, chip->params.prox_thresh_max);
 	}
+	//Since chip may send two times INT for near case, 
+	//clear psensor int flag again after set new threshold
+	ams_i2c_modify(chip->client, chip->shadow, TMD2755_REG_STATUS, 
+					TMD2755_INT_ST_PRX_IRQ, TMD2755_INT_ST_PRX_IRQ);
 	return;
 }
 
@@ -208,8 +212,8 @@ void tmd2755_process_saturation_event(struct tmd2755_chip *chip)
 void tmd2755_init_prox_mode(struct tmd2755_chip *chip)
 {
 	/* Init Low threshold to 0 - Only looking for Detect events after init */
-	log("Setting Initial Thresholds = [%d, %d], (low=%d)", MIN_PROX_THRESHOLD, 
-	chip->params.prox_thresh_max, chip->params.prox_thresh_min);
+	log("Setting Initial Thresholds = [%d, %d], (low=%d), offset=%d", 	MIN_PROX_THRESHOLD,
+		chip->params.prox_thresh_max, chip->params.prox_thresh_min, chip->params.poffset);
 
 	ams_i2c_write(chip->client, chip->shadow, TMD2755_REG_PILTL, MIN_PROX_THRESHOLD);
 	ams_i2c_write(chip->client, chip->shadow, TMD2755_REG_PILTH, MIN_PROX_THRESHOLD);
@@ -312,12 +316,9 @@ int tmd2755_offset_calibration(struct tmd2755_chip *chip)
 		/* get updated prox offset */
 		tmd2755_read_poffset(chip);
 	}
-
 	/* Restore register enable and interrupt enable */
 	ams_i2c_modify(chip->client, sh, TMD2755_REG_ENABLE,  TMD2755_PEN, saveenab);
 	ams_i2c_modify(chip->client, sh, TMD2755_REG_INTENAB, TMD2755_PIEN, saveint);
-	
-
 	return ret;
 }
 
@@ -326,7 +327,7 @@ int tmd2755_configure_prox_mode(struct tmd2755_chip *chip, u8 state)
 	struct i2c_client *client = chip->client;
 	u8 *sh = chip->shadow;
 
-	dev_info(&chip->client->dev, "%*.*s():%*d --> Configuring Prox Mode %s\n",
+	dev_dbg(&chip->client->dev, "%*.*s():%*d --> Configuring Prox Mode %s\n",
 		MIN_KERNEL_LOG_LEN, MAX_KERNEL_LOG_LEN, __func__, LINE_NUM_KERNEL_LOG_LEN, __LINE__, state ? "ON" : "OFF");
 
 	/* Turning on prox */
@@ -371,9 +372,7 @@ int tmd2755_configure_prox_mode(struct tmd2755_chip *chip, u8 state)
 		chip->prox_info.detected = true;
 		chip->prox_info.raw = 0;
 	} else {
-		if(chip->params.poffset < chip->params.poffset_limit){
-			chip->params.poffset_last = chip->params.poffset;
-		}
+		chip->params.poffset_last = chip->params.poffset;
 		/* Turning off prox */
 		/* Disable Proximity feature, and all interrupts associated with prox */
 		ams_i2c_modify(client, sh, TMD2755_REG_ENABLE, TMD2755_PEN, 0);

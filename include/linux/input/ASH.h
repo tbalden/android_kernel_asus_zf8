@@ -106,12 +106,12 @@ typedef struct{
 	int (*proximity_store_calibration_lo)(int calvalue);
 	int (*proximity_show_calibration_inf)(void);
 	int (*proximity_store_calibration_inf)(int calvalue); 
-#ifdef CONFIG_TMD2755_FLAG
 	int (*proximity_show_calibration_offset)(void);
 	int (*proximity_store_calibration_offset)(int calvalue); 
 	int (*proximity_show_oil_flag)(void);
 	int (*proximity_store_oil_flag)(int flag);
-#endif
+	int (*proximity_show_oil_timer)(void);
+	int (*proximity_store_oil_timer)(int time);
 	int (*proximity_show_adc)(void);
 }psensor_ATTR_Calibration;
 
@@ -146,12 +146,9 @@ typedef struct{
  * psensor_ATTR_Extension - attributes for psensor extensive functions.
  */
 typedef struct{
-#ifdef CONFIG_TMD2755_FLAG
 	ssize_t (*proximity_show_allreg)(struct device *dev, 	struct device_attribute *attr, char *buf);
 	ssize_t (*proximity_chip_cal_en)(bool flag);
-#else
-	bool (*proximity_show_allreg)(void);
-#endif
+	//bool (*proximity_show_allreg)(void);
 
 	/*switch ON/OFF proximity polling adc*/
 	bool (*proximity_show_polling_mode)(void);
@@ -281,11 +278,7 @@ typedef struct{
  * lsensor_ATTR_Extension - attributes for lsensor extensive functions.
  */
 typedef struct{
-#ifdef CONFIG_TMD2755_FLAG
 	ssize_t (*light_show_allreg)(struct device *dev, struct device_attribute *attr, char *buf);
-#else
-	bool (*light_show_allreg)(void);
-#endif
 	/*modify the sensitivity of light sensor*/
 	int (*light_show_sensitivity)(void);
 	int (*light_store_sensitivity)(int sensitivity);
@@ -549,9 +542,7 @@ extern void hallsensor_report_lid(int lid);
 #define PSENSOR_HI_CALIBRATION_FILE  	"/vendor/factory/psensor_hi.nv"
 #define PSENSOR_LOW_CALIBRATION_FILE  	"/vendor/factory/psensor_low.nv"
 #define PSENSOR_INF_CALIBRATION_FILE  	"/vendor/factory/psensor_inf.nv"
-#ifdef CONFIG_TMD2755_FLAG
 #define PSENSOR_OFFSET_CALIBRATION_FILE  	"/vendor/factory/psensor_offset.nv"
-#endif
 
 /*For transition period from 3/5 to 2/4 +++*/
 #define PSENSOR_1CM_CALIBRATION_FILE    "/vendor/factory/psensor_1cm.nv"
@@ -957,9 +948,7 @@ typedef struct psensor_hw {
 	int proximity_low_threshold_default;	
 	int proximity_hi_threshold_default;
 	int proximity_crosstalk_default;
-#ifdef CONFIG_TMD2755_FLAG
 	int proximity_offset_default;
-#endif
 	int proximity_autok_min;
 	int proximity_autok_max;
 
@@ -980,12 +969,10 @@ typedef struct psensor_hw {
 	int (*proximity_hw_set_autoK)(int autoK);
 	int (*proximity_hw_set_period)(int period);
 	
-#ifdef CONFIG_TMD2755_FLAG
 	int (*proximity_hw_chip_cal_en)(bool flag);
 	int (*proximity_hw_get_offset)(void);
 	int (*proximity_hw_set_fac_offset)(int offset);
 	int (*proximity_hw_set_offset_limit)(int en, int thresh);
-#endif
 }psensor_hw;
 
 /**
@@ -1017,9 +1004,6 @@ typedef struct lsensor_hw {
 	int (*light_hw_turn_onoff)(bool bOn);
 	int (*light_hw_interrupt_onoff)(bool bOn);
 	int (*light_hw_get_adc)(void);
-#ifdef CONFIG_TMD2755_FLAG
-	int (*light_hw_get_lux)(void);
-#endif
 
 	int (*light_hw_set_hi_threshold)(int hi_threshold);
 	int (*light_hw_set_lo_threshold)(int low_threshold);
@@ -1077,11 +1061,7 @@ typedef struct ALSPS_hw {
 	int (*ALSPS_hw_check_ID)(void);
 	int (*ALSPS_hw_init)(struct i2c_client* client);
 	int (*ALSPS_hw_get_interrupt)(void);
-#ifdef CONFIG_TMD2755_FLAG
 	ssize_t (*ALSPS_hw_show_allreg)(struct device *dev, struct device_attribute *attr, char *buf);
-#else
-	int (*ALSPS_hw_show_allreg)(void);
-#endif
 	int (*ALSPS_hw_set_register)(uint8_t reg, int value);
 	int (*ALSPS_hw_get_register)(uint8_t reg);
 	int (*ALSPS_hw_close_power)(void);
@@ -1089,13 +1069,11 @@ typedef struct ALSPS_hw {
 	psensor_hw	*mpsensor_hw;
 	lsensor_hw	*mlsensor_hw;
 }ALSPS_hw;
-
-#ifdef CONFIG_TMD2755_FLAG
+ 
 typedef struct tmd2755_status_param{
-	  bool probe_status;
-	  bool log_first_evt;
-}tmd2755_status_param;
-#endif
+	 bool probe_status;
+	 bool log_first_evt;
+ }tmd2755_status_param;
 
  /**
  * ALSPS_FRGB_hw - the i2c control functions for ALSPS FRGB sensor including psensor and lsensor.

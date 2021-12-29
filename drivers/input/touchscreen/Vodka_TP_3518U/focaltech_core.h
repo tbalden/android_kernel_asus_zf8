@@ -215,6 +215,7 @@ struct fts_ts_data {
     ktime_t irq_received;
 // fod
     bool fp_enable;
+    bool aod_enable;
     int fp_report_type;
     int fp_x;
     int fp_y;

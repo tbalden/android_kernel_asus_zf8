@@ -123,6 +123,7 @@ EXPORT_SYMBOL(FRGBsensor_report_raw);
 void lrgbsensor_report_lux(void)
 {
 	static int count = 0;
+	log("report lux=%d, count=%d", report_data[0], count);
 	input_report_abs(input_dev_als, ABS_MISC, report_data[0]);		/* LUX */
 	input_report_abs(input_dev_als, ABS_HAT0X, count);	/* R */
 	input_report_abs(input_dev_als, ABS_HAT0Y, report_data[2]);	/* G */

@@ -890,6 +890,21 @@ QDF_STATUS sme_qos_msg_processor(struct mac_context *mac_ctx,
 	return status;
 }
 
+/**
+ * sme_qos_process_disconnect_roam_ind() - Delete the existing TSPEC
+ * flows when roaming due to disconnect is complete.
+ * @mac - Pointer to the global MAC parameter structure.
+ * @vdev_id: Vdev id
+ *
+ * Return: None
+ */
+static void
+sme_qos_process_disconnect_roam_ind(struct mac_context *mac,
+				    uint8_t vdev_id)
+{
+	sme_qos_delete_existing_flows(mac, vdev_id);
+}
+
 /*
  * sme_qos_csr_event_ind() - The QoS sub-module in SME expects notifications
  * from CSR when certain events occur as mentioned in sme_qos_csr_event_indType.
@@ -960,6 +975,10 @@ QDF_STATUS sme_qos_csr_event_ind(struct mac_context *mac,
 		status =
 			sme_qos_process_set_key_success_ind(mac, sessionId,
 							    pEvent_info);
+		break;
+	case SME_QOS_CSR_DISCONNECT_ROAM_COMPLETE:
+		sme_qos_process_disconnect_roam_ind(mac, sessionId);
+		status = QDF_STATUS_SUCCESS;
 		break;
 	default:
 		/* Err msg */
@@ -3839,6 +3858,11 @@ void sme_send_mscs_action_frame(uint8_t vdev_id)
 		return;
 
 	mscs_req->vdev_id = vdev_id;
+	if (!qos_session->assocInfo.bss_desc) {
+		sme_err("BSS descriptor is NULL so we won't send request to PE");
+		qdf_mem_free(mscs_req);
+		return;
+	}
 	qdf_mem_copy(&mscs_req->bssid.bytes[0],
 		     &qos_session->assocInfo.bss_desc->bssId[0],
 		     sizeof(struct qdf_mac_addr));

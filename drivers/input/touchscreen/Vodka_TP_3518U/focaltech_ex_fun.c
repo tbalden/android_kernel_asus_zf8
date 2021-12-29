@@ -1297,6 +1297,38 @@ static ssize_t fts_fp_ctrl_mode_store(
 	return count;
 }
 
+static ssize_t fts_aod_ctrl_mode_show(
+    struct device *dev, struct device_attribute *attr, char *buf)
+{
+    int count = 0;
+
+    count = snprintf(buf + count, PAGE_SIZE, "AOD:%s\n",
+                     fts_data->aod_enable ? "On" : "Off");
+
+    return count;
+}
+
+static ssize_t fts_aod_ctrl_mode_store(
+    struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+{
+    // listen vendor.asus.touch_control_aod
+    if (FTS_SYSFS_ECHO_ON(buf)) {
+        if (!fts_data->aod_enable) {
+            FTS_DEBUG("Notify AOD enable");
+            fts_data->aod_enable = ENABLE;
+        }
+    } else if (FTS_SYSFS_ECHO_OFF(buf)) {
+        if (fts_data->aod_enable) {
+            FTS_DEBUG("Notify AOD disable");
+            fts_data->aod_enable = DISABLE;
+            fts_data->next_resume_isaod = false;
+        }
+    }
+
+    FTS_DEBUG("Notify AOD:%d", fts_data->aod_enable);
+    return count;
+}
+
 static ssize_t fp_auth_status_show(
     struct device *dev, struct device_attribute *attr, char *buf)
 {
@@ -1396,6 +1428,7 @@ static DEVICE_ATTR(touch_disable, S_IRUGO | S_IWUSR, fts_touch_disable_show, fts
 static DEVICE_ATTR(touch_report_rate, S_IRUGO | S_IWUSR, NULL, fts_touch_report_rate_store);
 static DEVICE_ATTR(fts_fp_mode, S_IRUGO | S_IWUSR, fts_fp_mode_show, fts_fp_mode_store);
 static DEVICE_ATTR(fts_fp_ctrl_mode, S_IRUGO | S_IWUSR, fts_fp_ctrl_mode_show, fts_fp_ctrl_mode_store);
+static DEVICE_ATTR(fts_aod_ctrl_mode, S_IRUGO | S_IWUSR, fts_aod_ctrl_mode_show, fts_aod_ctrl_mode_store);
 static DEVICE_ATTR(fp_auth_status, S_IRUGO | S_IWUSR, fp_auth_status_show, fp_auth_status_store);
 static DEVICE_ATTR(fp_area, S_IRUGO | S_IWUSR, fp_area_show, fp_area_store);
 static DEVICE_ATTR(fts_phone_state, S_IRUGO | S_IWUSR, fts_phonecall_state_show, fts_phonecall_state_store);
@@ -1420,6 +1453,7 @@ static struct attribute *fts_attributes[] = {
     &dev_attr_touch_report_rate.attr,
     &dev_attr_fts_fp_mode.attr,
     &dev_attr_fts_fp_ctrl_mode.attr,
+    &dev_attr_fts_aod_ctrl_mode.attr,
     &dev_attr_fp_auth_status.attr,
     &dev_attr_fp_area.attr,
     &dev_attr_fts_phone_state.attr,

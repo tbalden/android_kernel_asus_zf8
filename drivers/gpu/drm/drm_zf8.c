@@ -12,6 +12,7 @@ static int g_hdr = 0;
 int ghbm_on_requested;
 int ghbm_on_achieved;
 int fod_spot_ui_ready;
+EXPORT_SYMBOL(fod_spot_ui_ready);
 int fod_gesture_touched;
 extern struct class *drm_class;
 extern struct kobject* asus_class_get_kobj(struct class *cls);

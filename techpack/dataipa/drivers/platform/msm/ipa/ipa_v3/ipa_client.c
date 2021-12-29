@@ -454,6 +454,51 @@ int ipa3_smmu_map_peer_buff(u64 iova, u32 size, bool map, struct sg_table *sgt,
 }
 EXPORT_SYMBOL(ipa3_smmu_map_peer_buff);
 
+int ipa3_smmu_map_ctg(u64 iova, u32 size, bool map, phys_addr_t pa,
+	enum ipa_smmu_cb_type cb_type)
+{
+	struct iommu_domain *smmu_domain;
+	int res;
+	phys_addr_t phys;
+	unsigned long va;
+	size_t len;
+
+	if (cb_type >= IPA_SMMU_CB_MAX) {
+		IPAERR("invalid cb_type\n");
+		return -EINVAL;
+	}
+
+	if (ipa3_ctx->s1_bypass_arr[cb_type]) {
+		IPADBG("CB# %d is set to s1 bypass\n", cb_type);
+		return 0;
+	}
+
+	smmu_domain = ipa3_get_smmu_domain_by_type(cb_type);
+	if (!smmu_domain) {
+		IPAERR("invalid smmu domain\n");
+		return -EINVAL;
+	}
+
+	if (map) {
+		va = rounddown(iova, PAGE_SIZE);
+		phys = rounddown(pa, PAGE_SIZE);
+		len = size + ((iova - va > pa - phys) ?
+			(iova-va) : (pa - phys));
+		res = ipa3_iommu_map(smmu_domain, va, phys,
+			roundup(len, PAGE_SIZE),
+			IOMMU_READ | IOMMU_WRITE);
+	} else {
+		va = rounddown(iova, PAGE_SIZE);
+		phys = rounddown(pa, PAGE_SIZE);
+		len = size + ((iova - va > pa - phys) ?
+			(iova-va) : (pa - phys));
+		res = iommu_unmap(smmu_domain, va,
+					roundup(len, PAGE_SIZE));
+	}
+	IPADBG("ctg %s 0x%llx to 0x%llx\n", map ? "map" : "unmap", pa, iova);
+	return 0;
+}
+
 static enum ipa_client_cb_type ipa_get_client_cb_type(
 					enum ipa_client_type client_type)
 {
@@ -1131,6 +1176,29 @@ static int ipa3_xdci_stop_gsi_ch_brute_force(u32 clnt_hdl,
 	}
 }
 
+int ipa3_remove_secondary_flow_ctrl(int gsi_chan_hdl)
+{
+	int code = 0;
+	int result;
+
+	result = gsi_query_flow_control_state_ee(gsi_chan_hdl, 0, 1, &code);
+	if (result == GSI_STATUS_SUCCESS) {
+		code = 0;
+		result = gsi_flow_control_ee(gsi_chan_hdl, 0, false, true,
+							&code);
+		if (result == GSI_STATUS_SUCCESS) {
+			IPADBG("flow control sussess ch %d code %d\n",
+					gsi_chan_hdl, code);
+		} else {
+			IPADBG("failed to flow control ch %d code %d\n",
+					gsi_chan_hdl, code);
+		}
+	} else {
+		IPADBG("failed to query flow control mode ch %d code %d\n",
+					gsi_chan_hdl, code);
+	}
+	return result;
+}
 /* Clocks should be voted for before invoking this function */
 static int ipa3_stop_ul_chan_with_data_drain(u32 qmi_req_id,
 		u32 source_pipe_bitmask, bool should_force_clear, u32 clnt_hdl,
@@ -1203,7 +1271,7 @@ static int ipa3_stop_ul_chan_with_data_drain(u32 qmi_req_id,
 			goto exit;
 	}
 	/* if still stop_in_proc or not empty, activate force clear */
-	if (should_force_clear) {
+	if (should_force_clear && IPA_CLIENT_IS_PROD(ep->client)) {
 		result = ipa3_enable_force_clear(qmi_req_id, false,
 			source_pipe_bitmask);
 		if (result) {
@@ -1216,10 +1284,15 @@ static int ipa3_stop_ul_chan_with_data_drain(u32 qmi_req_id,
 			IPAERR(
 				"failed to force clear %d, remove delay from SCND reg\n"
 				, result);
-			ep_ctrl_scnd.endp_delay = false;
-			ipahal_write_reg_n_fields(
-				IPA_ENDP_INIT_CTRL_SCND_n, clnt_hdl,
-				&ep_ctrl_scnd);
+			if (ipa3_ctx->ipa_endp_delay_wa_v2) {
+				ipa3_remove_secondary_flow_ctrl(
+						ep->gsi_chan_hdl);
+			} else {
+				ep_ctrl_scnd.endp_delay = false;
+				ipahal_write_reg_n_fields(
+					IPA_ENDP_INIT_CTRL_SCND_n, clnt_hdl,
+					&ep_ctrl_scnd);
+			}
 		}
 	}
 	/* with force clear, wait for emptiness */

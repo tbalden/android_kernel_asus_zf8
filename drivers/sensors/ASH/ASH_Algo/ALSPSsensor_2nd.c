@@ -41,7 +41,7 @@
 #else
 	#define dbg(fmt, args...)
 #endif
-#define log(fmt, args...) printk(KERN_INFO "[%s][%s][%s]"fmt,MODULE_NAME,SENSOR_TYPE_NAME,__func__,##args)
+#define log(fmt, args...) printk(KERN_INFO "[%s]"fmt,MODULE_NAME,##args)
 #define err(fmt, args...) do{	\
 		printk(KERN_ERR "[%s][%s]"fmt,MODULE_NAME,SENSOR_TYPE_NAME,##args);	\
 		sprintf(g_error_mesg, "[%s][%s]"fmt,MODULE_NAME,SENSOR_TYPE_NAME,##args);	\
@@ -1292,13 +1292,13 @@ static lsensor_ATTR_HAL mlsensor_ATTR_HAL = {
 /*********************/
 /*Extension Function*/
 /********************/
-static bool mproximity_show_allreg(void)
+static ssize_t mproximity_show_allreg(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	if(g_ALSPS_hw_client_2nd->ALSPS_hw_show_allreg == NULL) {
 		err("2nd IRsensor_hw_show_allreg NOT SUPPORT. \n");
 		return false;
 	}
-	g_ALSPS_hw_client_2nd->ALSPS_hw_show_allreg();
+	g_ALSPS_hw_client_2nd->ALSPS_hw_show_allreg(dev, attr, buf);
 	return true;
 }
 
@@ -1466,14 +1466,13 @@ static int mproximity_store_anti_oil_enable(bool enable)
 	
 	return ret;
 }
-
-static bool mlight_show_allreg(void)
+static ssize_t mlight_show_allreg(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	if(g_ALSPS_hw_client_2nd->ALSPS_hw_show_allreg == NULL) {
 		err("2nd IRsensor_hw_show_allreg NOT SUPPORT. \n");
 		return false;
 	}
-	g_ALSPS_hw_client_2nd->ALSPS_hw_show_allreg();
+	g_ALSPS_hw_client_2nd->ALSPS_hw_show_allreg(dev, attr, buf);
 	return true;
 }
 
@@ -2457,7 +2456,7 @@ static ALSPS_I2C mALSPS_I2C = {
 };
 
 extern int ALSPS_i2c_add_driver_2nd(void);
-static int __init ALSPS_init_2nd(void)
+void ALSPS_init_2nd(struct work_struct *work)
 {
 	int ret = 0;
 	log("2nd Driver INIT +++\n");
@@ -2492,14 +2491,14 @@ static int __init ALSPS_init_2nd(void)
 		goto init_err;
 	
 	log("2nd Driver INIT ---\n");
-	return 0;
+	return;
 
 init_err:
 	err("2nd Driver INIT ERROR ---\n");
-	return ret;
+	return;
 }
 
-static void __exit ALSPS_exit_2nd(void)
+void ALSPS_exit_2nd(struct work_struct *work)
 {
 	log("2nd Driver EXIT +++\n");
 
@@ -2529,9 +2528,6 @@ static void __exit ALSPS_exit_2nd(void)
 	
 	log("2nd Driver EXIT ---\n");
 }
-
-module_init(ALSPS_init_2nd);
-module_exit(ALSPS_exit_2nd);
 
 MODULE_AUTHOR("Clay_Wang <Clay_Wang@asus.com>");
 MODULE_DESCRIPTION("2nd Proximity and Ambient Light Sensor");

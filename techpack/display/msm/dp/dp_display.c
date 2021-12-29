@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/module.h>
@@ -807,7 +807,7 @@ static const struct component_ops dp_display_comp_ops = {
 	.unbind = dp_display_unbind,
 };
 
-static void dp_display_send_hpd_event(struct dp_display_private *dp)
+static bool dp_display_send_hpd_event(struct dp_display_private *dp)
 {
 	struct drm_device *dev = NULL;
 	struct drm_connector *connector;
@@ -816,24 +816,18 @@ static void dp_display_send_hpd_event(struct dp_display_private *dp)
 	char *envp[5];
 	int rc = 0;
 
-	if (dp->mst.mst_active) {
-		DP_DEBUG("skip notification for mst mode\n");
-		dp_display_state_remove(DP_STATE_DISCONNECT_NOTIFIED);
-		return;
-	}
-
 	connector = dp->dp_display.base_connector;
 
 	if (!connector) {
 		DP_ERR("connector not set\n");
-		return;
+		return false;
 	}
 
 	connector->status = connector->funcs->detect(connector, false);
 	if (dp->cached_connector_status == connector->status) {
 		DP_DEBUG("connector status (%d) unchanged, skipping uevent\n",
 				dp->cached_connector_status);
-		return;
+		return false;
 	}
 
 	dp->cached_connector_status = connector->status;
@@ -842,7 +836,7 @@ static void dp_display_send_hpd_event(struct dp_display_private *dp)
 
 	if (dp->debug->skip_uevent) {
 		DP_INFO("skipping uevent\n");
-		goto update_state;
+		return false;
 	}
 
 	snprintf(name, HPD_STRING_SIZE, "name=%s", connector->name);
@@ -864,14 +858,7 @@ static void dp_display_send_hpd_event(struct dp_display_private *dp)
 	rc = kobject_uevent_env(&dev->primary->kdev->kobj, KOBJ_CHANGE, envp);
 	DP_INFO("uevent %s: %d\n", rc ? "failure" : "success", rc);
 
-update_state:
-	if (connector->status == connector_status_connected) {
-		dp_display_state_add(DP_STATE_CONNECT_NOTIFIED);
-		dp_display_state_remove(DP_STATE_DISCONNECT_NOTIFIED);
-	} else {
-		dp_display_state_add(DP_STATE_DISCONNECT_NOTIFIED);
-		dp_display_state_remove(DP_STATE_CONNECT_NOTIFIED);
-	}
+	return true;
 }
 
 static int dp_display_send_hpd_notification(struct dp_display_private *dp)
@@ -900,13 +887,29 @@ static int dp_display_send_hpd_notification(struct dp_display_private *dp)
 
 	dp->aux->state |= DP_STATE_NOTIFICATION_SENT;
 
-	if (!dp->mst.mst_active)
+	reinit_completion(&dp->notification_comp);
+
+	if (!dp->mst.mst_active) {
 		dp->dp_display.is_sst_connected = hpd;
-	else
+
+		if (!dp_display_send_hpd_event(dp))
+			goto skip_wait;
+	} else {
 		dp->dp_display.is_sst_connected = false;
 
-	reinit_completion(&dp->notification_comp);
-	dp_display_send_hpd_event(dp);
+		if (!dp->mst.cbs.hpd)
+			goto skip_wait;
+
+		dp->mst.cbs.hpd(&dp->dp_display, true);
+	}
+
+	if (hpd) {
+		dp_display_state_add(DP_STATE_CONNECT_NOTIFIED);
+		dp_display_state_remove(DP_STATE_DISCONNECT_NOTIFIED);
+	} else {
+		dp_display_state_add(DP_STATE_DISCONNECT_NOTIFIED);
+		dp_display_state_remove(DP_STATE_CONNECT_NOTIFIED);
+	}
 
 	/*
 	 * Skip the wait if TUI is active considering that the user mode will
@@ -942,11 +945,9 @@ static void dp_display_update_mst_state(struct dp_display_private *dp,
 	dp->panel->mst_state = state;
 }
 
-static void dp_display_process_mst_hpd_high(struct dp_display_private *dp,
-						bool mst_probe)
+static void dp_display_mst_init(struct dp_display_private *dp)
 {
 	bool is_mst_receiver;
-	struct dp_mst_hpd_info info;
 	const unsigned long clear_mstm_ctrl_timeout_us = 100000;
 	u8 old_mstm_ctrl;
 	int ret;
@@ -957,60 +958,64 @@ static void dp_display_process_mst_hpd_high(struct dp_display_private *dp,
 		return;
 	}
 
-	DP_MST_DEBUG("mst_hpd_high work. mst_probe:%d\n", mst_probe);
+	is_mst_receiver = dp->panel->read_mst_cap(dp->panel);
 
-	if (!dp->mst.mst_active) {
-		is_mst_receiver = dp->panel->read_mst_cap(dp->panel);
-
-		if (!is_mst_receiver) {
-			DP_MST_DEBUG("sink doesn't support mst\n");
-			return;
-		}
-
-		/* clear sink mst state */
-		drm_dp_dpcd_readb(dp->aux->drm_aux, DP_MSTM_CTRL,
-				&old_mstm_ctrl);
-		drm_dp_dpcd_writeb(dp->aux->drm_aux, DP_MSTM_CTRL, 0);
-
-		/* add extra delay if MST state is not cleared */
-		if (old_mstm_ctrl) {
-			DP_MST_DEBUG("MSTM_CTRL is not cleared, wait %dus\n",
-					clear_mstm_ctrl_timeout_us);
-			usleep_range(clear_mstm_ctrl_timeout_us,
-				clear_mstm_ctrl_timeout_us + 1000);
-		}
-
-		ret = drm_dp_dpcd_writeb(dp->aux->drm_aux, DP_MSTM_CTRL,
-				 DP_MST_EN | DP_UP_REQ_EN | DP_UPSTREAM_IS_SRC);
-		if (ret < 0) {
-			DP_ERR("sink mst enablement failed\n");
-			return;
-		}
-
-		dp_display_update_mst_state(dp, true);
-	} else if (dp->mst.mst_active && mst_probe) {
-		info.mst_protocol = dp->parser->has_mst_sideband;
-		info.mst_port_cnt = dp->debug->mst_port_cnt;
-		info.edid = dp->debug->get_edid(dp->debug);
-
-		if (dp->mst.cbs.set_mgr_state)
-			dp->mst.cbs.set_mgr_state(&dp->dp_display, true, &info);
-
-		if (dp->mst.cbs.hpd)
-			dp->mst.cbs.hpd(&dp->dp_display, true);
+	if (!is_mst_receiver) {
+		DP_MST_DEBUG("sink doesn't support mst\n");
+		return;
 	}
 
-	DP_MST_DEBUG("mst_hpd_high. mst_active:%d\n", dp->mst.mst_active);
+	/* clear sink mst state */
+	drm_dp_dpcd_readb(dp->aux->drm_aux, DP_MSTM_CTRL, &old_mstm_ctrl);
+	drm_dp_dpcd_writeb(dp->aux->drm_aux, DP_MSTM_CTRL, 0);
+
+	/* add extra delay if MST state is not cleared */
+	if (old_mstm_ctrl) {
+		DP_MST_DEBUG("MSTM_CTRL is not cleared, wait %dus\n",
+				clear_mstm_ctrl_timeout_us);
+		usleep_range(clear_mstm_ctrl_timeout_us,
+			clear_mstm_ctrl_timeout_us + 1000);
+	}
+
+	ret = drm_dp_dpcd_writeb(dp->aux->drm_aux, DP_MSTM_CTRL,
+				DP_MST_EN | DP_UP_REQ_EN | DP_UPSTREAM_IS_SRC);
+	if (ret < 0) {
+		DP_ERR("sink mst enablement failed\n");
+		return;
+	}
+
+	dp_display_update_mst_state(dp, true);
 }
 
-static void dp_display_host_init(struct dp_display_private *dp)
+static void dp_display_set_mst_mgr_state(struct dp_display_private *dp,
+					bool state)
+{
+	struct dp_mst_hpd_info info = {0};
+
+	if (!dp->mst.mst_active)
+		return;
+
+	info.mst_protocol = dp->parser->has_mst_sideband;
+	if (state) {
+		info.mst_port_cnt = dp->debug->mst_port_cnt;
+		info.edid = dp->debug->get_edid(dp->debug);
+	}
+
+	if (dp->mst.cbs.set_mgr_state)
+		dp->mst.cbs.set_mgr_state(&dp->dp_display, state, &info);
+
+	DP_MST_DEBUG("mst_mgr_state: %d\n", state);
+}
+
+static int dp_display_host_init(struct dp_display_private *dp)
 {
 	bool flip = false;
 	bool reset;
+	int rc = 0;
 
 	if (dp_display_state_is(DP_STATE_INITIALIZED)) {
 		dp_display_state_log("[already initialized]");
-		return;
+		return rc;
 	}
 
 	if (dp->hpd->orientation == ORIENTATION_CC2)
@@ -1018,9 +1023,21 @@ static void dp_display_host_init(struct dp_display_private *dp)
 
 	reset = dp->debug->sim_mode ? false : !dp->hpd->multi_func;
 
-	dp->power->init(dp->power, flip);
+	rc = dp->power->init(dp->power, flip);
+	if (rc) {
+		DP_WARN("Power init failed.\n");
+		SDE_EVT32_EXTERNAL(SDE_EVTLOG_FUNC_CASE1, dp->state);
+		return rc;
+	}
+
 	dp->hpd->host_init(dp->hpd, &dp->catalog->hpd);
-	dp->ctrl->init(dp->ctrl, flip, reset);
+	rc = dp->ctrl->init(dp->ctrl, flip, reset);
+	if (rc) {
+		DP_WARN("Ctrl init Failed.\n");
+		SDE_EVT32_EXTERNAL(SDE_EVTLOG_FUNC_CASE2, dp->state);
+		goto error_ctrl;
+	}
+
 	enable_irq(dp->irq);
 	dp_display_abort_hdcp(dp, false);
 
@@ -1028,18 +1045,29 @@ static void dp_display_host_init(struct dp_display_private *dp)
 
 	/* log this as it results from user action of cable connection */
 	DP_INFO("[OK]\n");
+	return rc;
+
+error_ctrl:
+	dp->hpd->host_deinit(dp->hpd, &dp->catalog->hpd);
+	dp->power->deinit(dp->power);
+	return rc;
 }
 
-static void dp_display_host_ready(struct dp_display_private *dp)
+static int dp_display_host_ready(struct dp_display_private *dp)
 {
+	int rc = 0;
+
 	if (!dp_display_state_is(DP_STATE_INITIALIZED)) {
-		dp_display_state_show("[not initialized]");
-		return;
+		rc = dp_display_host_init(dp);
+		if (rc) {
+			dp_display_state_show("[not initialized]");
+			return rc;
+		}
 	}
 
 	if (dp_display_state_is(DP_STATE_READY)) {
 		dp_display_state_log("[already ready]");
-		return;
+		return rc;
 	}
 
 	/*
@@ -1067,6 +1095,7 @@ static void dp_display_host_ready(struct dp_display_private *dp)
 	dp_display_state_add(DP_STATE_READY);
 	/* log this as it results from user action of cable connection */
 	DP_INFO("[OK]\n");
+	return rc;
 }
 
 static void dp_display_host_unready(struct dp_display_private *dp)
@@ -1148,11 +1177,32 @@ static int dp_display_process_hpd_high(struct dp_display_private *dp)
 	 */
 	if (dp_display_state_is(DP_STATE_SRC_PWRDN) &&
 			dp_display_state_is(DP_STATE_CONFIGURED)) {
-		dp_display_host_init(dp);
+		rc = dp_display_host_init(dp);
+		if (rc) {
+			DP_WARN("Host init Failed");
+			if (!dp_display_state_is(DP_STATE_SUSPENDED)) {
+				/*
+				 * If not suspended no point of going forward if
+				 * resource is not enabled.
+				 */
+				dp_display_state_remove(DP_STATE_CONNECTED);
+			}
+			goto end;
+		}
+
+		/*
+		 * If device is suspended and host_init fails, there is
+		 * one more chance for host init to happen in prepare which
+		 * is why DP_STATE_SRC_PWRDN is removed only at success.
+		 */
 		dp_display_state_remove(DP_STATE_SRC_PWRDN);
 	}
 
-	dp_display_host_ready(dp);
+	rc = dp_display_host_ready(dp);
+	if (rc) {
+		dp_display_state_show("[ready failed]");
+		goto end;
+	}
 
 	dp->link->psm_config(dp->link, &dp->panel->link_info, false);
 	dp->debug->psm_enabled = false;
@@ -1177,7 +1227,7 @@ static int dp_display_process_hpd_high(struct dp_display_private *dp)
 	dp->link->process_request(dp->link);
 	dp->panel->handle_sink_request(dp->panel);
 
-	dp_display_process_mst_hpd_high(dp, false);
+	dp_display_mst_init(dp);
 
 	rc = dp->ctrl->on(dp->ctrl, dp->mst.mst_active,
 			dp->panel->fec_en, dp->panel->dsc_en, false);
@@ -1188,7 +1238,7 @@ static int dp_display_process_hpd_high(struct dp_display_private *dp)
 
 	dp->process_hpd_connect = false;
 
-	dp_display_process_mst_hpd_high(dp, true);
+	dp_display_set_mst_mgr_state(dp, true);
 end:
 	mutex_unlock(&dp->session_lock);
 
@@ -1237,7 +1287,6 @@ skip_notify:
 static void dp_display_process_mst_hpd_low(struct dp_display_private *dp)
 {
 	int rc = 0;
-	struct dp_mst_hpd_info info = {0};
 
 	if (dp->mst.mst_active) {
 		DP_MST_DEBUG("mst_hpd_low work\n");
@@ -1253,17 +1302,12 @@ static void dp_display_process_mst_hpd_low(struct dp_display_private *dp)
 		if (dp->mst.cbs.hpd)
 			dp->mst.cbs.hpd(&dp->dp_display, false);
 
-		dp_display_update_mst_state(dp, false);
-
 		if ((dp_display_state_is(DP_STATE_CONNECT_NOTIFIED) ||
 				dp_display_state_is(DP_STATE_ENABLED)))
 			rc = dp_display_send_hpd_notification(dp);
 
-		if (dp->mst.cbs.set_mgr_state) {
-			info.mst_protocol = dp->parser->has_mst_sideband;
-			dp->mst.cbs.set_mgr_state(&dp->dp_display, false,
-					&info);
-		}
+		dp_display_update_mst_state(dp, false);
+		dp_display_set_mst_mgr_state(dp, false);
 	}
 
 	DP_MST_DEBUG("mst_hpd_low. mst_active:%d\n", dp->mst.mst_active);
@@ -1332,7 +1376,12 @@ static int dp_display_usbpd_configure_cb(struct device *dev)
 	dp_display_state_remove(DP_STATE_ABORTED);
 	dp_display_state_add(DP_STATE_CONFIGURED);
 
-	dp_display_host_init(dp);
+	rc = dp_display_host_init(dp);
+	if (rc) {
+		DP_ERR("Host init Failed");
+		mutex_unlock(&dp->session_lock);
+		return rc;
+	}
 
 	/* check for hpd high */
 	if (dp->hpd->hpd_high)
@@ -1571,6 +1620,7 @@ static void dp_display_attention_work(struct work_struct *work)
 {
 	struct dp_display_private *dp = container_of(work,
 			struct dp_display_private, attention_work);
+	int rc = 0;
 
 	SDE_EVT32_EXTERNAL(SDE_EVTLOG_FUNC_ENTRY, dp->state);
 	mutex_lock(&dp->session_lock);
@@ -1640,16 +1690,20 @@ static void dp_display_attention_work(struct work_struct *work)
 		if (dp->link->sink_request & DP_TEST_LINK_TRAINING) {
 			SDE_EVT32_EXTERNAL(dp->state, DP_TEST_LINK_TRAINING);
 			dp->link->send_test_response(dp->link);
-			dp->ctrl->link_maintenance(dp->ctrl);
+			rc = dp->ctrl->link_maintenance(dp->ctrl);
 		}
 
 		if (dp->link->sink_request & DP_LINK_STATUS_UPDATED) {
 			SDE_EVT32_EXTERNAL(dp->state, DP_LINK_STATUS_UPDATED);
-			dp->ctrl->link_maintenance(dp->ctrl);
+			rc = dp->ctrl->link_maintenance(dp->ctrl);
 		}
 
-		dp_audio_enable(dp, true);
+		if (!rc)
+			dp_audio_enable(dp, true);
+
 		mutex_unlock(&dp->session_lock);
+		if (rc)
+			goto exit;
 
 		if (dp->link->sink_request & (DP_TEST_LINK_PHY_TEST_PATTERN |
 			DP_TEST_LINK_TRAINING))
@@ -1850,6 +1904,7 @@ static int dp_init_sub_modules(struct dp_display_private *dp)
 	}
 
 	g_dp_display->is_mst_supported = dp->parser->has_mst;
+	g_dp_display->dsc_cont_pps = dp->parser->dsc_continuous_pps;
 
 	dp->catalog = dp_catalog_get(dev, dp->parser);
 	if (IS_ERR(dp->catalog)) {
@@ -2125,7 +2180,23 @@ static int dp_display_prepare(struct dp_display *dp_display, void *panel)
 	 */
 	if (dp_display_state_is(DP_STATE_SRC_PWRDN) &&
 			dp_display_state_is(DP_STATE_CONFIGURED)) {
-		dp_display_host_init(dp);
+		rc = dp_display_host_init(dp);
+		if (rc) {
+			/*
+			 * Skip all the events that are similar to abort case, just that
+			 * the stream clks should be enabled so that no commit failure can
+			 * be seen.
+			 */
+			DP_ERR("Host init failed.\n");
+			goto end;
+		}
+
+		/*
+		 * Remove DP_STATE_SRC_PWRDN flag on successful host_init to
+		 * prevent cases such as below.
+		 * 1. MST stream 1 failed to do host init then stream 2 can retry again.
+		 * 2. Resume path fails, now sink sends hpd_high=0 and hpd_high=1.
+		 */
 		dp_display_state_remove(DP_STATE_SRC_PWRDN);
 	}
 
@@ -2154,7 +2225,12 @@ static int dp_display_prepare(struct dp_display *dp_display, void *panel)
 	}
 
 	/* For supporting DP_PANEL_SRC_INITIATED_POWER_DOWN case */
-	dp_display_host_ready(dp);
+	rc = dp_display_host_ready(dp);
+
+	if (rc) {
+		dp_display_state_show("[ready failed]");
+		goto end;
+	}
 
 	if (dp->debug->psm_enabled) {
 		dp->link->psm_config(dp->link, &dp->panel->link_info, false);

@@ -98,8 +98,8 @@
 #define EVENT_UP(flag)                      (FTS_TOUCH_UP == flag)
 #define EVENT_NO_DOWN(data)                 (!data->point_num)
 
-#define FTX_MAX_COMPATIBLE_TYPE             4
-#define FTX_MAX_COMMMAND_LENGTH             16
+#define FTS_MAX_COMPATIBLE_TYPE             4
+#define FTS_MAX_COMMMAND_LENGTH             16
 
 
 /*****************************************************************************
@@ -111,6 +111,9 @@
 #define FTS_PATCH_COMERR_PM                     0
 #define FTS_TIMEOUT_COMERR_PM                   700
 
+#define FTS_HIGH_REPORT                         0
+#define FTS_SIZE_DEFAULT                        15
+
 
 /*****************************************************************************
 * Private enumerations, structures and unions using typedef
@@ -119,7 +122,7 @@ struct ftxxxx_proc {
     struct proc_dir_entry *proc_entry;
     u8 opmode;
     u8 cmd_len;
-    u8 cmd[FTX_MAX_COMMMAND_LENGTH];
+    u8 cmd[FTS_MAX_COMMMAND_LENGTH];
 };
 
 struct fts_ts_platform_data {
@@ -127,8 +130,6 @@ struct fts_ts_platform_data {
     u32 irq_gpio_flags;
     u32 reset_gpio;
     u32 reset_gpio_flags;
-    u32 vddio;
-    u32 vddio_flags;
     bool have_key;
     u32 key_number;
     u32 keys[FTS_MAX_KEYS];
@@ -148,7 +149,19 @@ struct ts_event {
     int flag;   /* touch event flag: 0 -- down; 1-- up; 2 -- contact */
     int id;     /*touch ID */
     int area;
-    int rate;
+};
+
+struct pen_event {
+    int inrange;
+    int tip;
+    int x;      /*x coordinate */
+    int y;      /*y coordinate */
+    int p;      /* pressure */
+    int flag;   /* touch event flag: 0 -- down; 1-- up; 2 -- contact */
+    int id;     /*touch ID */
+    int tilt_x;
+    int tilt_y;
+    int tool_type;
 };
 
 struct fts_ts_data {
@@ -156,6 +169,7 @@ struct fts_ts_data {
     struct spi_device *spi;
     struct device *dev;
     struct input_dev *input_dev;
+    struct input_dev *pen_dev;
     struct fts_ts_platform_data *pdata;
     struct ts_ic_info ic_info;
     struct workqueue_struct *ts_workqueue;
@@ -167,6 +181,7 @@ struct fts_ts_data {
     spinlock_t irq_lock;
     struct mutex report_mutex;
     struct mutex bus_lock;
+    unsigned long intr_jiffies;
     int irq;
     int log_level;
     int fw_is_running;      /* confirm fw is running when using spi:default 0 */
@@ -183,6 +198,8 @@ struct fts_ts_data {
     bool cover_mode;
     bool charger_mode;
     bool gesture_mode;      /* gesture enable or disable, default: disable */
+    bool prc_mode;
+    struct pen_event pevent;
     /* multi-touch */
     struct ts_event *events;
     u8 *bus_tx_buf;
@@ -311,6 +328,7 @@ int fts_enter_test_environment(bool test_state);
 
 /* Other */
 int fts_reset_proc(int hdelayms);
+int fts_check_cid(struct fts_ts_data *ts_data, u8 id_h);
 int fts_wait_tp_to_valid(void);
 void fts_release_all_finger(void);
 void fts_tp_state_recovery(struct fts_ts_data *ts_data);

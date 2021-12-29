@@ -1,12 +1,14 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
-/* Copyright (c) 2016-2020, The Linux Foundation. All rights reserved. */
+/* Copyright (c) 2016-2021, The Linux Foundation. All rights reserved. */
 
 #ifndef _CNSS_PCI_H
 #define _CNSS_PCI_H
 
 #include <linux/iommu.h>
 #include <linux/mhi.h>
+#if IS_ENABLED(CONFIG_PCI_MSM)
 #include <linux/msm_pcie.h>
+#endif
 #include <linux/pci.h>
 
 #include "main.h"
@@ -80,19 +82,26 @@ struct cnss_pci_data {
 	const struct pci_device_id *pci_device_id;
 	u32 device_id;
 	u16 revision_id;
+	u64 dma_bit_mask;
 	struct cnss_wlan_driver *driver_ops;
 	u8 pci_link_state;
 	u8 pci_link_down_ind;
 	struct pci_saved_state *saved_state;
 	struct pci_saved_state *default_state;
+#if IS_ENABLED(CONFIG_PCI_MSM)
 	struct msm_pcie_register_event msm_pci_event;
+#endif
 	struct cnss_pm_stats pm_stats;
 	atomic_t auto_suspended;
 	atomic_t drv_connected;
 	u8 drv_connected_last;
+	u32 qmi_send_usage_count;
 	u16 def_link_speed;
 	u16 def_link_width;
-	struct completion wake_event;
+	u16 cur_link_speed;
+	int wake_gpio;
+	int wake_irq;
+	u32 wake_counter;
 	u8 monitor_wake_intr;
 	struct iommu_domain *iommu_domain;
 	u8 smmu_s1_enable;
@@ -239,5 +248,10 @@ int cnss_pci_debug_reg_write(struct cnss_pci_data *pci_priv, u32 offset,
 int cnss_pci_get_iova(struct cnss_pci_data *pci_priv, u64 *addr, u64 *size);
 int cnss_pci_get_iova_ipa(struct cnss_pci_data *pci_priv, u64 *addr,
 			  u64 *size);
-
+int cnss_pci_get_user_msi_assignment(struct cnss_pci_data *pci_priv,
+				     char *user_name,
+				     int *num_vectors,
+				     u32 *user_base_data,
+				     u32 *base_vector);
+bool cnss_pci_is_smmu_s1_enabled(struct cnss_pci_data *pci_priv);
 #endif /* _CNSS_PCI_H */

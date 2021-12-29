@@ -331,15 +331,6 @@
  *    overlay for lahaina-audio.dtsi - start
  *    ====================================
  */
-
-&cdc_dmic01_gpios {
-	qcom,tlmm-pins = <174>;
-};
-
-&cdc_dmic23_gpios {
-	qcom,tlmm-pins = <176>;
-};
-
 &cdc_dmic45_gpios {
 	status = "ok";
 };

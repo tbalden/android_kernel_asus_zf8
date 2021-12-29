@@ -1722,8 +1722,8 @@ static bool lim_update_sta_ds(struct mac_context *mac_ctx, tpSirMacMgmtHdr hdr,
 		sta_ds->vhtSupportedRxNss = assoc_req->operMode.rxNSS + 1;
 	} else {
 		sta_ds->vhtSupportedRxNss =
-			((sta_ds->supportedRates.vhtRxMCSMap & MCSMAPMASK2x2)
-				== MCSMAPMASK2x2) ? 1 : 2;
+			 ((sta_ds->supportedRates.vhtTxMCSMap & MCSMAPMASK2x2)
+			  == MCSMAPMASK2x2) ? 1 : 2;
 	}
 	lim_update_stads_he_6ghz_op(session, sta_ds);
 	lim_update_sta_ds_op_classes(assoc_req, sta_ds);
@@ -2954,19 +2954,9 @@ bool lim_fill_lim_assoc_ind_params(
 	return true;
 }
 
-/**
- * lim_send_mlm_assoc_ind() - Sends assoc indication to SME
- * @mac_ctx: Global Mac context
- * @sta_ds: Station DPH hash entry
- * @session_entry: PE session entry
- *
- * This function sends either LIM_MLM_ASSOC_IND
- * or LIM_MLM_REASSOC_IND to SME.
- *
- * Return: None
- */
-void lim_send_mlm_assoc_ind(struct mac_context *mac_ctx,
-	tpDphHashNode sta_ds, struct pe_session *session_entry)
+QDF_STATUS lim_send_mlm_assoc_ind(struct mac_context *mac_ctx,
+				  tpDphHashNode sta_ds,
+				  struct pe_session *session_entry)
 {
 	tpLimMlmAssocInd assoc_ind;
 	tpSirAssocReq assoc_req;
@@ -2976,7 +2966,7 @@ void lim_send_mlm_assoc_ind(struct mac_context *mac_ctx,
 
 	if (!session_entry->parsedAssocReq) {
 		pe_err(" Parsed Assoc req is NULL");
-		return;
+		return QDF_STATUS_E_INVAL;
 	}
 
 	/* Get a copy of the already parsed Assoc Request */
@@ -2985,7 +2975,7 @@ void lim_send_mlm_assoc_ind(struct mac_context *mac_ctx,
 
 	if (!assoc_req) {
 		pe_err("assoc req for assoc_id:%d is NULL", sta_ds->assocId);
-		return;
+		return QDF_STATUS_E_INVAL;
 	}
 
 	/* Get the phy_mode */
@@ -3009,17 +2999,17 @@ void lim_send_mlm_assoc_ind(struct mac_context *mac_ctx,
 		if (!assoc_ind) {
 			lim_release_peer_idx(mac_ctx, sta_ds->assocId,
 					     session_entry);
-			return;
+			return QDF_STATUS_E_INVAL;
 		}
 		if (!lim_fill_lim_assoc_ind_params(assoc_ind, mac_ctx,
 						   sta_ds, session_entry)) {
 			qdf_mem_free(assoc_ind);
-			return;
+			return QDF_STATUS_E_INVAL;
 		}
 		lim_post_sme_message(mac_ctx, LIM_MLM_ASSOC_IND,
 				     (uint32_t *)assoc_ind);
 		qdf_mem_free(assoc_ind);
 	}
 
-	return;
+	return QDF_STATUS_SUCCESS;
 }

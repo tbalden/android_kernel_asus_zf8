@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/of.h>
@@ -162,19 +162,14 @@ bool cam_cpas_is_feature_supported(uint32_t flag, uint32_t hw_map,
 		if (soc_private->feature_info[i].feature == flag)
 			break;
 
-	if (i == soc_private->num_feature_info) {
-		CAM_INFO(CAM_CPAS, "Feature not found, no of featues: %d",
-			soc_private->num_feature_info);
+	if (i == soc_private->num_feature_info)
 		goto end;
-	}
 
 	if (soc_private->feature_info[i].type == CAM_CPAS_FEATURE_TYPE_DISABLE
 		|| (soc_private->feature_info[i].type ==
 		CAM_CPAS_FEATURE_TYPE_ENABLE)) {
 		if ((soc_private->feature_info[i].hw_map & hw_map) == hw_map)
 			supported = soc_private->feature_info[i].enable;
-		else
-			supported = !soc_private->feature_info[i].enable;
 	} else {
 		if (!fuse_val) {
 			CAM_ERR(CAM_CPAS,

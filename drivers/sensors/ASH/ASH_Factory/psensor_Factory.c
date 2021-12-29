@@ -15,6 +15,7 @@
  /*****************************************/
 /* Proximity Sensor Factory Module */
 /****************************************/
+#include <linux/version.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/fs.h>
@@ -60,7 +61,11 @@ int psensor_factory_read_high(const char *str)
 
 	if (fp->f_op != NULL) {
 		pos_lsts = 0;
+#if ((LINUX_VERSION_CODE >= KERNEL_VERSION(4,14,0)))
+		readlen = kernel_read(fp, buf, 16, &pos_lsts);
+#else
 		readlen = vfs_read(fp, buf, 6, &pos_lsts);
+#endif
 		buf[readlen] = '\0';		
 	} else {
 		err("Proximity read High Calibration strlen: f_op=NULL or op->read=NULL\n");
@@ -104,7 +109,11 @@ bool psensor_factory_write_high(int calvalue, const char *str)
 
 	if (fp->f_op != NULL) {
 		pos_lsts = 0;
+#if ((LINUX_VERSION_CODE >= KERNEL_VERSION(4,14,0)))
+		kernel_write(fp, buf, strlen(buf), &fp->f_pos);
+#else
 		vfs_write(fp, buf, strlen(buf), &fp->f_pos);				
+#endif
 	} else {
 		err("Proximity Hi-Calibration strlen: f_op=NULL or op->write=NULL\n");
 		set_fs(old_fs);
@@ -141,7 +150,11 @@ int psensor_factory_read_low(const char *str)
 
 	if (fp->f_op != NULL) {
 		pos_lsts = 0;
+#if ((LINUX_VERSION_CODE >= KERNEL_VERSION(4,14,0)))
+		readlen = kernel_read(fp, buf, 16, &pos_lsts);
+#else
 		readlen = vfs_read(fp, buf, 6, &pos_lsts);
+#endif
 		buf[readlen] = '\0';		
 	} else {
 		err("Proximity read Low Calibration strlen f_op=NULL or op->read=NULL\n");
@@ -185,7 +198,11 @@ bool psensor_factory_write_low(int calvalue, const char *str)
 
 	if (fp->f_op != NULL) {
 		pos_lsts = 0;
+#if ((LINUX_VERSION_CODE >= KERNEL_VERSION(4,14,0)))
+		kernel_write(fp, buf, strlen(buf), &fp->f_pos);
+#else
 		vfs_write(fp, buf, strlen(buf), &fp->f_pos);				
+#endif
 	} else {
 		err("Proximity Lo-Calibration strlen: f_op=NULL or op->write=NULL\n");
 		set_fs(old_fs);
@@ -226,7 +243,11 @@ int psensor_factory_read_inf(const char *str)
 
 	if (fp->f_op != NULL) {
 		pos_lsts = 0;
+#if ((LINUX_VERSION_CODE >= KERNEL_VERSION(4,14,0)))
+		readlen = kernel_read(fp, buf, 16, &pos_lsts);
+#else
 		readlen = vfs_read(fp, buf, 6, &pos_lsts);
+#endif
 		buf[readlen] = '\0';		
 	} else {
 		err("Proximity read INF Calibration strlen: f_op=NULL or op->read=NULL\n");
@@ -270,7 +291,11 @@ bool psensor_factory_write_inf(int calvalue, const char *str)
 
 	if (fp->f_op != NULL) {
 		pos_lsts = 0;
+#if ((LINUX_VERSION_CODE >= KERNEL_VERSION(4,14,0)))
+		kernel_write(fp, buf, strlen(buf), &fp->f_pos);
+#else
 		vfs_write(fp, buf, strlen(buf), &fp->f_pos);				
+#endif
 	} else {
 		err("Proximity INF-Calibration strlen: f_op=NULL or op->write=NULL\n");
 		set_fs(old_fs);
@@ -308,7 +333,11 @@ int psensor_factory_read_2cm(const char *str)
 
 	if (fp->f_op != NULL) {
 		pos_lsts = 0;
+#if ((LINUX_VERSION_CODE >= KERNEL_VERSION(4,14,0)))
+		readlen = kernel_read(fp, buf, 16, &pos_lsts);
+#else
 		readlen = vfs_read(fp, buf, 6, &pos_lsts);
+#endif
 		buf[readlen] = '\0';		
 	} else {
 		err("Proximity read 2CM Calibration strlen: f_op=NULL or op->read=NULL\n");
@@ -352,7 +381,11 @@ bool psensor_factory_write_2cm(int calvalue, const char *str)
 
 	if (fp->f_op != NULL) {
 		pos_lsts = 0;
+#if ((LINUX_VERSION_CODE >= KERNEL_VERSION(4,14,0)))
+		kernel_write(fp, buf, strlen(buf), &fp->f_pos);
+#else
 		vfs_write(fp, buf, strlen(buf), &fp->f_pos);				
+#endif
 	} else {
 		err("Proximity 2CM Calibration strlen: f_op=NULL or op->write=NULL\n");
 		set_fs(old_fs);
@@ -389,7 +422,11 @@ int psensor_factory_read_4cm(const char *str)
 
 	if (fp->f_op != NULL) {
 		pos_lsts = 0;
+#if ((LINUX_VERSION_CODE >= KERNEL_VERSION(4,14,0)))
+		readlen = kernel_read(fp, buf, 16, &pos_lsts);
+#else
 		readlen = vfs_read(fp, buf, 6, &pos_lsts);
+#endif
 		buf[readlen] = '\0';		
 	} else {
 		err("Proximity read 4CM Calibration strlen: f_op=NULL or op->read=NULL\n");
@@ -433,7 +470,11 @@ bool psensor_factory_write_4cm(int calvalue, const char *str)
 
 	if (fp->f_op != NULL) {
 		pos_lsts = 0;
+#if ((LINUX_VERSION_CODE >= KERNEL_VERSION(4,14,0)))
+		kernel_write(fp, buf, strlen(buf), &fp->f_pos);
+#else
 		vfs_write(fp, buf, strlen(buf), &fp->f_pos);				
+#endif
 	} else {
 		err("Proximity 4CM Calibration strlen: f_op=NULL or op->write=NULL\n");
 		set_fs(old_fs);
@@ -470,7 +511,11 @@ int psensor_factory_read_3cm(const char *str)
 
 	if (fp->f_op != NULL) {
 		pos_lsts = 0;
+#if ((LINUX_VERSION_CODE >= KERNEL_VERSION(4,14,0)))
+		readlen = kernel_read(fp, buf, 16, &pos_lsts);
+#else
 		readlen = vfs_read(fp, buf, 6, &pos_lsts);
+#endif
 		buf[readlen] = '\0';		
 	} else {
 		err("Proximity read 3CM Calibration strlen: f_op=NULL or op->read=NULL\n");
@@ -514,7 +559,11 @@ bool psensor_factory_write_3cm(int calvalue, const char *str)
 
 	if (fp->f_op != NULL) {
 		pos_lsts = 0;
+#if ((LINUX_VERSION_CODE >= KERNEL_VERSION(4,14,0)))
+		kernel_write(fp, buf, strlen(buf), &fp->f_pos);
+#else
 		vfs_write(fp, buf, strlen(buf), &fp->f_pos);				
+#endif
 	} else {
 		err("Proximity 3CM Calibration strlen: f_op=NULL or op->write=NULL\n");
 		set_fs(old_fs);
@@ -551,7 +600,11 @@ int psensor_factory_read_5cm(const char *str)
 
 	if (fp->f_op != NULL) {
 		pos_lsts = 0;
+#if ((LINUX_VERSION_CODE >= KERNEL_VERSION(4,14,0)))
+		readlen = kernel_read(fp, buf, 16, &pos_lsts);
+#else
 		readlen = vfs_read(fp, buf, 6, &pos_lsts);
+#endif
 		buf[readlen] = '\0';		
 	} else {
 		err("Proximity read 5CM Calibration strlen: f_op=NULL or op->read=NULL\n");
@@ -595,7 +648,11 @@ bool psensor_factory_write_5cm(int calvalue, const char *str)
 
 	if (fp->f_op != NULL) {
 		pos_lsts = 0;
+#if ((LINUX_VERSION_CODE >= KERNEL_VERSION(4,14,0)))
+		kernel_write(fp, buf, strlen(buf), &fp->f_pos);
+#else
 		vfs_write(fp, buf, strlen(buf), &fp->f_pos);				
+#endif
 	} else {
 		err("Proximity 5CM Calibration strlen: f_op=NULL or op->write=NULL\n");
 		set_fs(old_fs);
@@ -632,7 +689,11 @@ int psensor_factory_read_1cm(const char *str)
 
 	if (fp->f_op != NULL) {
 		pos_lsts = 0;
+#if ((LINUX_VERSION_CODE >= KERNEL_VERSION(4,14,0)))
+		readlen = kernel_read(fp, buf, 16, &pos_lsts);
+#else
 		readlen = vfs_read(fp, buf, 6, &pos_lsts);
+#endif
 		buf[readlen] = '\0';		
 	} else {
 		err("Proximity read 1CM Calibration strlen: f_op=NULL or op->read=NULL\n");
@@ -676,7 +737,11 @@ bool psensor_factory_write_1cm(int calvalue, const char *str)
 
 	if (fp->f_op != NULL) {
 		pos_lsts = 0;
+#if ((LINUX_VERSION_CODE >= KERNEL_VERSION(4,14,0)))
+		kernel_write(fp, buf, strlen(buf), &fp->f_pos);
+#else
 		vfs_write(fp, buf, strlen(buf), &fp->f_pos);				
+#endif
 	} else {
 		err("Proximity 1CM Calibration strlen: f_op=NULL or op->write=NULL\n");
 		set_fs(old_fs);

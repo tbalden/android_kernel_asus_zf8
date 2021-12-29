@@ -375,6 +375,11 @@ static void fts_gesture_report(struct input_dev *input_dev, int gesture_id)
 		write_fp_xy(fts_data);
 		proxy_skip = true;
 	}
+	if ((ts_data->aod_enable == ENABLE) && (ts_data->fp_report_type == 0)) {  // AOD only
+		FTS_INFO("key L in aod");
+		gesture = KEY_GESTURE_L;
+		proxy_skip = false;
+	}
         break;
     case GESTURE_F:
 	if ((ts_data->fp_enable == 1) && (ts_data->fp_report_type != 0)) {
@@ -386,6 +391,11 @@ static void fts_gesture_report(struct input_dev *input_dev, int gesture_id)
 		write_fp_xy(fts_data);
 		proxy_skip = true;
 	}
+	if ((ts_data->aod_enable == ENABLE) && (ts_data->fp_report_type == 0)) {  // AOD only
+		FTS_INFO("key L in aod");
+		gesture = KEY_GESTURE_L;
+		proxy_skip = false;
+	}
 	break;
     case GESTURE_U:
 	if ((ts_data->fp_enable == 1) && (ts_data->fp_report_type != 0)) {
@@ -394,12 +404,20 @@ static void fts_gesture_report(struct input_dev *input_dev, int gesture_id)
 		fts_data->next_resume_isaod = false;
 		proxy_skip = true;
 	}
+	if ((ts_data->aod_enable == ENABLE) && (ts_data->fp_report_type == 0)) {  // AOD only
+		FTS_INFO("skip report U in aod");
+	}
 	break;
     case GESTURE_L:
 	if ((ts_data->fp_enable == 1) && (ts_data->fp_report_type != 0)) {
 		gesture = KEY_GESTURE_L;
 		FTS_INFO("key L");
 		proxy_skip = true;
+	}
+	if ((ts_data->aod_enable == ENABLE) && (ts_data->fp_report_type == 0)) {  // AOD only
+		FTS_INFO("key L in aod");
+		gesture = KEY_GESTURE_L;
+		proxy_skip = false;
 	}
 	break;
 // Zenmotion
@@ -680,7 +698,7 @@ int set_gesture_register(struct fts_ts_data *ts_data)
 	FTS_gesture_register_D6 = 0x00;
 	FTS_gesture_register_D7 = 0x00;
 
-	if (ts_data->fp_enable) {
+	if ((ts_data->fp_enable) || (ts_data->aod_enable == ENABLE)) {
 		FTS_gesture_register_D1 |= fod_bit;
 	}
 	if (ts_data->dclick_mode == 1) {
@@ -763,6 +781,11 @@ int is_enter_gesture_mode(struct fts_ts_data *ts_data)
 		enable_gesture = 1;
 		if (!ts_data->suspended)
 		FTS_INFO("Swipe up enable, enter gesture mode");
+	}
+
+	if (ts_data->aod_enable == ENABLE) {
+		enable_gesture = 1;
+		FTS_INFO("AOD triggered by touch , enter gesture mode");
 	}
 
 	return enable_gesture;

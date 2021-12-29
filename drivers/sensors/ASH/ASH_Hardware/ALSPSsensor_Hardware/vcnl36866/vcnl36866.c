@@ -35,7 +35,7 @@
 #else
 	#define dbg(fmt, args...)
 #endif
-#define log(fmt, args...) printk(KERN_INFO "[%s][%s][%s]"fmt,MODULE_NAME,SENSOR_TYPE_NAME,__func__,##args)
+#define log(fmt, args...) printk(KERN_INFO "[%s]"fmt,MODULE_NAME,##args)
 #define err(fmt, args...) printk(KERN_ERR "[%s][%s]"fmt,MODULE_NAME,SENSOR_TYPE_NAME,##args)
 
 /*****************************************/
@@ -50,11 +50,7 @@ static int vcnl36866_light_hw_set_config(void);
 /*ALSPS Sensor Part*/
 static int vcnl36866_ALSPS_hw_check_ID(void);
 static int vcnl36866_ALSPS_hw_init(struct i2c_client* client);
-#ifdef CONFIG_TMD2755_FLAG
 static ssize_t vcnl36866_ALSPS_hw_show_allreg(struct device *dev, struct device_attribute *attr, char *buf);
-#else
-static int vcnl36866_ALSPS_hw_show_allreg(void);
-#endif
 static int vcnl36866_ALSPS_hw_get_interrupt(void);
 static int vcnl36866_ALSPS_hw_set_register(uint8_t reg, int value);
 static int vcnl36866_ALSPS_hw_get_register(uint8_t reg);
@@ -260,29 +256,22 @@ static int vcnl36866_ALSPS_hw_init(struct i2c_client* client)
 	}
 	return 0;
 }
-#ifdef CONFIG_TMD2755_FLAG
 static ssize_t vcnl36866_ALSPS_hw_show_allreg(struct device *dev, struct device_attribute *attr, char *buf){
-	return 0;
-}
-#else
-static int vcnl36866_ALSPS_hw_show_allreg(void)
-{
 	int ret = 0;
-	uint8_t buf[2] = {0};
+	uint8_t buffer[2] = {0};
 	int reg = 0;
 	
 	for(reg = 0; reg < ARRAY_SIZE(vcnl36866_regs); reg++){
-		ret = i2c_read_reg_u16(g_i2c_client, vcnl36866_regs[reg].reg, buf);
+		ret = i2c_read_reg_u16(g_i2c_client, vcnl36866_regs[reg].reg, buffer);
 		if(ret < 0){
 			err("%s: show all Register ERROR. (REG:0x%x)\n", __FUNCTION__, vcnl36866_regs[reg].reg);
 			return ret;
 		}
-		log("Show All Register (0x%x) = 0x%02x%02x\n", vcnl36866_regs[reg].reg, buf[1], buf[0]);
+		log("Show All Register (0x%x) = 0x%02x%02x\n", vcnl36866_regs[reg].reg, buffer[1], buffer[0]);
 	}
 
 	return 0;
 }
-#endif
 
 static int vcnl36866_ALSPS_hw_set_register(uint8_t reg, int value)
 {	
@@ -1586,6 +1575,8 @@ static struct psensor_hw psensor_hw_vcnl36866 = {
 	.proximity_hw_set_lo_threshold = vcnl36866_proximity_hw_set_lo_threshold,
 	.proximity_hw_set_autoK = vcnl36866_proximity_hw_set_autoK,
 	.proximity_hw_set_period = vcnl36866_proximity_hw_set_period,
+	.proximity_hw_chip_cal_en = NULL,
+	.proximity_hw_get_offset = NULL,
 };
 
 static struct lsensor_hw lsensor_hw_vcnl36866 = {

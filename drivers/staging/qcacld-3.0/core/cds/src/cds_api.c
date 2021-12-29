@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -123,6 +123,8 @@ static struct ol_if_ops  dp_ol_if_ops = {
 	.send_delba = cds_send_delba,
 	.dp_rx_get_pending = dp_rx_tm_get_pending,
 #ifdef DP_MEM_PRE_ALLOC
+	.dp_prealloc_get_context = dp_prealloc_get_context_memory,
+	.dp_prealloc_put_context = dp_prealloc_put_context_memory,
 	.dp_prealloc_get_consistent = dp_prealloc_get_coherent,
 	.dp_prealloc_put_consistent = dp_prealloc_put_coherent,
 	.dp_get_multi_pages = dp_prealloc_get_multi_pages,
@@ -576,10 +578,9 @@ static int cds_hang_event_notifier_call(struct notifier_block *block,
 	if (!cds_hang_evt_buff)
 		return NOTIFY_STOP_MASK;
 
-	if (cds_hang_data->offset >= QDF_WLAN_MAX_HOST_OFFSET)
-		return NOTIFY_STOP_MASK;
-
 	total_len = sizeof(*cmd);
+	if (cds_hang_data->offset + total_len > QDF_WLAN_HANG_FW_OFFSET)
+		return NOTIFY_STOP_MASK;
 
 	cds_hang_evt_buff = cds_hang_data->hang_data + cds_hang_data->offset;
 	cmd = (struct cds_hang_event_fixed_param *)cds_hang_evt_buff;
@@ -588,11 +589,17 @@ static int cds_hang_event_notifier_call(struct notifier_block *block,
 
 	cmd->recovery_reason = gp_cds_context->recovery_reason;
 
+	/* userspace expects a fixed format */
+	qdf_mem_set(&cmd->driver_version, DRIVER_VER_LEN, ' ');
 	qdf_mem_copy(&cmd->driver_version, QWLAN_VERSIONSTR,
-		     DRIVER_VER_LEN);
+		     qdf_min(sizeof(QWLAN_VERSIONSTR) - 1,
+			     (size_t)DRIVER_VER_LEN));
 
+	/* userspace expects a fixed format */
+	qdf_mem_set(&cmd->hang_event_version, HANG_EVENT_VER_LEN, ' ');
 	qdf_mem_copy(&cmd->hang_event_version, QDF_HANG_EVENT_VERSION,
-		     HANG_EVENT_VER_LEN);
+		     qdf_min(sizeof(QDF_HANG_EVENT_VERSION) - 1,
+			     (size_t)HANG_EVENT_VER_LEN));
 
 	cds_hang_data->offset += total_len;
 	return NOTIFY_OK;
@@ -1927,9 +1934,9 @@ static void cds_trigger_recovery_handler(const char *func, const uint32_t line)
 		return;
 	}
 
-	/* ignore recovery if we are unloading; it would be a waste anyway */
 	if (cds_is_driver_unloading()) {
-		cds_info("WLAN is unloading; ignore recovery");
+		QDF_DEBUG_PANIC("WLAN is unloading recovery not expected(via %s:%d)",
+				func, line);
 		return;
 	}
 
