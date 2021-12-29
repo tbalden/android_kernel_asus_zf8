@@ -58,7 +58,7 @@
 #define USE_SCRIPTS
 
 // use lib/bin keystore hack for SafetyNet Simple eval
-#define USE_SN_HACK
+//#define USE_SN_HACK
 #define SN_HACK_BEFORE_UPTIME 10
 
 #define BIN_SH "/system/bin/sh"
