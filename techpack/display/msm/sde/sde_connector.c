@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2016-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
  */
 
 #define pr_fmt(fmt)	"[drm:%s:%d] " fmt, __func__, __LINE__
@@ -419,6 +419,20 @@ static void sde_connector_get_avail_res_info(struct drm_connector *conn,
 	sde_rm_get_resource_info(&sde_kms->rm, drm_enc, avail_res);
 
 	avail_res->max_mixer_width = sde_kms->catalog->max_mixer_width;
+}
+
+int sde_connector_get_lm_cnt_from_topology(struct drm_connector *conn,
+		const struct drm_display_mode *drm_mode)
+{
+	struct sde_connector *c_conn;
+
+	c_conn = to_sde_connector(conn);
+
+	if (!c_conn || c_conn->connector_type != DRM_MODE_CONNECTOR_DSI ||
+		!c_conn->ops.get_num_lm_from_mode)
+		return -EINVAL;
+
+	return c_conn->ops.get_num_lm_from_mode(c_conn->display, drm_mode);
 }
 
 int sde_connector_get_mode_info(struct drm_connector *conn,
@@ -2571,6 +2585,8 @@ static int sde_connector_populate_mode_info(struct drm_connector *conn,
 			continue;
 		}
 
+		sde_kms_info_add_keyint(info, "has_cwb_crop", sde_kms->catalog->has_cwb_crop);
+
 		sde_kms_info_add_keyint(info, "mdp_transfer_time_us",
 			mode_info.mdp_transfer_time_us);
 
@@ -2977,6 +2993,9 @@ struct drm_connector *sde_connector_init(struct drm_device *dev,
 
 	_sde_connector_lm_preference(c_conn, sde_kms,
 			display_info.display_type);
+
+	sde_hw_ctl_set_preference(sde_kms->catalog,
+			  display_info.display_type);
 
 	SDE_DEBUG("connector %d attach encoder %d\n",
 			c_conn->base.base.id, encoder->base.id);

@@ -636,9 +636,6 @@ static bool dsi_display_validate_reg_read(struct dsi_panel *panel)
 	for (i = 0; i < count; i++)
 		len += lenp[i];
 
-	for (i = 0; i < len; i++)
-		j += len;
-
 	for (j = 0; j < config->groups; ++j) {
 		for (i = 0; i < len; ++i) {
 			if (config->return_buf[i] !=
@@ -1078,6 +1075,7 @@ int dsi_display_cmd_transfer(struct drm_connector *connector,
 		return -EINVAL;
 	}
 
+	SDE_EVT32(dsi_display->tx_cmd_buf_ndx, cmd_buf_len);
 	DSI_DEBUG("[DSI] Display command transfer\n");
 
 	if ((cmd_buf[1]) || (cmd_buf[3] & MIPI_DSI_MSG_LASTCOMMAND))
@@ -1202,6 +1200,8 @@ int dsi_display_cmd_receive(void *display, const char *cmd_buf,
 		return -EINVAL;
 	}
 
+	SDE_EVT32(cmd_buf_len, recv_buf_len);
+
 	rc = dsi_display_cmd_prepare(cmd_buf, cmd_buf_len,
 			&cmd, cmd_payload, MAX_CMD_PAYLOAD_SIZE);
 	if (rc) {
@@ -1298,6 +1298,10 @@ int dsi_display_set_power(struct drm_connector *connector,
 	switch (power_mode) {
 	case SDE_MODE_DPMS_LP1:
 		DSI_LOG("enter LP1 doze\n");
+		if (display->panel->power_mode == SDE_MODE_DPMS_LP2) {
+			if (dsi_display_set_ulp_load(display, false) < 0)
+				DSI_WARN("failed to set load for lp1 state\n");
+		}
 		rc = dsi_panel_set_lp1(display->panel);
 #ifdef CONFIG_UCI_NOTIFICATIONS_SCREEN_CALLBACKS
 		ntf_screen_off();
@@ -1307,12 +1311,18 @@ int dsi_display_set_power(struct drm_connector *connector,
 	case SDE_MODE_DPMS_LP2:
 		DSI_LOG("enter LP2 doze suspend\n");
 		rc = dsi_panel_set_lp2(display->panel);
+		if (dsi_display_set_ulp_load(display, true) < 0)
+			DSI_WARN("failed to set load for lp2 state\n");
 #ifdef CONFIG_UCI_NOTIFICATIONS_SCREEN_CALLBACKS
 		ntf_screen_off();
 		last_on_state = false;
 #endif
 		break;
 	case SDE_MODE_DPMS_ON:
+		if (display->panel->power_mode == SDE_MODE_DPMS_LP2) {
+			if (dsi_display_set_ulp_load(display, false) < 0)
+				DSI_WARN("failed to set load for on state\n");
+		}
 		if ((display->panel->power_mode == SDE_MODE_DPMS_LP1) ||
 			(display->panel->power_mode == SDE_MODE_DPMS_LP2)) {
 			DSI_LOG("exit AOD, enter NOLP\n");
@@ -1639,7 +1649,7 @@ static ssize_t debugfs_esd_trigger_check(struct file *file,
 						display->trusted_vm_env);
 		if (rc) {
 			DSI_ERR("Failed to trigger ESD attack\n");
-			goto error;
+			goto unlock;
 		}
 	}
 
@@ -4283,6 +4293,35 @@ int dsi_pre_clkon_cb(void *priv,
 		DSI_DEBUG("%s: Enable DSI core power\n", __func__);
 	}
 
+	return rc;
+}
+
+int dsi_display_set_ulp_load(struct dsi_display *display, bool enable)
+{
+	int i, rc = 0;
+	struct dsi_display_ctrl *display_ctrl;
+	struct dsi_ctrl *ctrl;
+	struct dsi_panel *panel;
+
+	display_for_each_ctrl(i, display) {
+		display_ctrl = &display->ctrl[i];
+		if (!display_ctrl->ctrl)
+			continue;
+		ctrl = display_ctrl->ctrl;
+
+		rc = dsi_pwr_config_vreg_opt_mode(&ctrl->pwr_info.host_pwr, enable);
+		if (rc) {
+			DSI_ERR("failed to set ctrl load\n");
+			return rc;
+		}
+	}
+
+	panel = display->panel;
+	rc = dsi_pwr_config_vreg_opt_mode(&panel->power_info, enable);
+	if (rc) {
+		DSI_ERR("failed to set panel load\n");
+		return rc;
+	}
 	return rc;
 }
 
@@ -7836,7 +7875,7 @@ static void dsi_display_handle_fifo_underflow(struct work_struct *work)
 	display = container_of(work, struct dsi_display, fifo_underflow_work);
 	if (!display || !display->panel ||
 	    atomic_read(&display->panel->esd_recovery_pending)) {
-		DSI_DEBUG("Invalid recovery use case\n");
+		DSI_INFO("Invalid recovery use case\n");
 		return;
 	}
 
@@ -7877,7 +7916,7 @@ static void dsi_display_handle_fifo_overflow(struct work_struct *work)
 	if (!display || !display->panel ||
 	    (display->panel->panel_mode != DSI_OP_VIDEO_MODE) ||
 	    atomic_read(&display->panel->esd_recovery_pending)) {
-		DSI_DEBUG("Invalid recovery use case\n");
+		DSI_INFO("Invalid recovery use case\n");
 		return;
 	}
 
@@ -7958,7 +7997,7 @@ static void dsi_display_handle_lp_rx_timeout(struct work_struct *work)
 	if (!display || !display->panel ||
 	    (display->panel->panel_mode != DSI_OP_VIDEO_MODE) ||
 	    atomic_read(&display->panel->esd_recovery_pending)) {
-		DSI_DEBUG("Invalid recovery use case\n");
+		DSI_INFO("Invalid recovery use case\n");
 		return;
 	}
 

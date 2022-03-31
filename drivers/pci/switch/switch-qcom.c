@@ -15,6 +15,8 @@
 
 #define DIODE_VENDOR_ID	0x12d8
 #define DIODE_DEVICE_ID	0xb304
+#define NTN3_VENDOR_ID	PCI_VENDOR_ID_TOSHIBA
+#define NTN3_DEVICE_ID	0x0623
 
 /*
  * @DIODE_ERRATA_0: Apply errata specific to the upstream port (USP).
@@ -25,7 +27,7 @@ enum {
 	DIODE_ERRATA_0,
 	DIODE_ERRATA_1,
 	DIODE_ERRATA_2,
-	SWITCH_MAX,
+	DIODE_ERRATA_MAX,
 };
 
 struct pci_qcom_switch_errata {
@@ -246,7 +248,7 @@ static int config_downstream_port_1_diode(struct device *dev, void *data)
 	return 0;
 }
 
-struct pci_qcom_switch_errata errata[] = {
+struct pci_qcom_switch_errata diode_errata[] = {
 	[DIODE_ERRATA_0] = {config_upstream_port_diode},
 	[DIODE_ERRATA_1] = {config_downstream_port_1_diode},
 	[DIODE_ERRATA_2] = {config_common_port_diode},
@@ -256,42 +258,94 @@ static struct pci_device_id switch_qcom_pci_tbl[] = {
 	{
 		PCI_DEVICE(DIODE_VENDOR_ID, DIODE_DEVICE_ID),
 	},
+	{
+		PCI_DEVICE(NTN3_VENDOR_ID, NTN3_DEVICE_ID),
+	},
 	{0},
 };
 MODULE_DEVICE_TABLE(pci, switch_qcom_pci_tbl);
 
-static int switch_qcom_pci_probe(struct pci_dev *pdev,
-			const struct pci_device_id *id)
+static int switch_qcom_config_errata(struct pci_dev *pdev)
 {
-	int ret = 0, errata_num = 0;
+	int errata_num = 0;
+	int ret;
 
-	ret = of_property_read_u32((&pdev->dev)->of_node, "errata",
-							&errata_num);
-	if (ret) {
-		pr_info("No erratas needed\n");
+	ret = of_property_read_u32(pdev->dev.of_node, "errata",
+				   &errata_num);
+	if (ret)
 		return 0;
-	}
 
-	pr_info("Errata being requested: %d\n", errata_num);
+	if (pdev->vendor == DIODE_VENDOR_ID) {
+		dev_info(&pdev->dev, "Diode errata being requested: %d\n",
+			 errata_num);
 
-	if (errata_num >= SWITCH_MAX) {
-		pr_err("Invalid errata num:%d\n", errata_num);
-		return -EINVAL;
-	}
+		if (errata_num >= DIODE_ERRATA_MAX) {
+			dev_err(&pdev->dev, "Invalid errata num: %d\n",
+				errata_num);
+			return -EINVAL;
+		}
 
-	ret = errata[errata_num].config_errata(&pdev->dev, NULL);
-	if (ret) {
-		pr_err("Error applying errata\n");
-		return ret;
+		ret = diode_errata[errata_num].config_errata(&pdev->dev, NULL);
+		if (ret)
+			return ret;
 	}
 
 	return 0;
 }
 
+static void switch_qcom_pci_remove(struct pci_dev *pdev)
+{
+	pci_clear_master(pdev);
+	pci_disable_device(pdev);
+}
+
+static int switch_qcom_pci_probe(struct pci_dev *pdev,
+			const struct pci_device_id *id)
+{
+	int ret = 0;
+
+	ret = switch_qcom_config_errata(pdev);
+	if (ret)
+		return ret;
+
+	ret = pci_enable_device(pdev);
+	if (ret) {
+		dev_err(&pdev->dev, "failed to enable PCIe device\n");
+		return ret;
+	}
+
+	pci_set_master(pdev);
+
+	return 0;
+}
+
+static int switch_qcom_pci_suspend(struct device *dev)
+{
+	struct pci_dev *pdev = to_pci_dev(dev);
+
+	pci_save_state(pdev);
+	pci_set_power_state(pdev, PCI_D3hot);
+
+	return 0;
+}
+static int switch_qcom_pci_resume(struct device *dev)
+{
+	struct pci_dev *pdev = to_pci_dev(dev);
+
+	pci_set_power_state(pdev, PCI_D0);
+	pci_restore_state(pdev);
+
+	return 0;
+}
+const struct dev_pm_ops switch_qcom_pci_pm_ops = {
+	SET_SYSTEM_SLEEP_PM_OPS(switch_qcom_pci_suspend, switch_qcom_pci_resume)
+};
 static struct pci_driver switch_qcom_pci_driver = {
 	.name		= "pcie-qcom-switch",
 	.id_table	= switch_qcom_pci_tbl,
 	.probe		= switch_qcom_pci_probe,
+	.remove		= switch_qcom_pci_remove,
+	.driver.pm	= &switch_qcom_pci_pm_ops,
 };
 
 static int __init switch_qcom_pci_init(void)

@@ -109,12 +109,14 @@
 			<0x100 &apps_smmu 0x0201 0x1>;
 
 		qcom,aux-clk-freq = <17>; /* 16.6 MHz */
+		qcom,tpwr-on-scale = <1>;
+		qcom,tpwr-on-value = <9>;
 		qcom,eq-fmdc-t-min-phase23 = <1>;
 		qcom,slv-addr-space-size = <0x40000000>;
 		qcom,ep-latency = <10>;
 		qcom,num-parf-testbus-sel = <0xb9>;
 
-		qcom,pcie-phy-ver = <1102>;
+		qcom,pcie-phy-ver = <1108>;
 		qcom,phy-status-offset = <0x1214>;
 		qcom,phy-status-bit = <7>;
 		qcom,phy-power-down-offset = <0x1240>;
@@ -157,7 +159,7 @@
 				0x1168 0x0a 0x0
 				0x116c 0x04 0x0
 				0x119c 0x88 0x0
-				0x1174 0x20 0x0
+				0x1174 0x60 0x0
 				0x117c 0x06 0x0
 				0x11a0 0x14 0x0
 				0x11a8 0x0f 0x0
@@ -264,6 +266,8 @@
 				0x1584 0x28 0x0
 				0x1370 0x2e 0x0
 				0x155c 0x2e 0x0
+				0x140c 0x1d 0x0
+				0x1388 0xaa 0x0
 				0x1200 0x00 0x0
 				0x1244 0x03 0x0>;
 
@@ -277,7 +281,14 @@
 		msi-controller;
 		reg = <0xa0000000 0x0>;
 		interrupt-parent = <&intc>;
-		interrupts = <GIC_SPI 119 IRQ_TYPE_LEVEL_HIGH>;
+		interrupts = <GIC_SPI 119 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 120 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 121 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 122 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 123 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 124 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 125 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 126 IRQ_TYPE_LEVEL_HIGH>;
 		qcom,snps;
 	};
 };

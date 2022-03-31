@@ -103,7 +103,10 @@
 
 		resets = <&gcc GCC_QUSB2PHY_PRIM_BCR>;
 		reset-names = "phy_reset";
-		qcom,param-override-seq = <0x43 0x70>; /* override_x1 */
+		qcom,param-override-seq =
+			<0xe6 0x6c	/* override_x0 */
+			 0x8b 0x70	/* override_x1 */
+			 0x16 0x74>;	/* override_x2 */
 	};
 
 	/* Primary USB port related QMP USB DP Combo PHY */
@@ -332,7 +335,8 @@
 		resets = <&gcc GCC_USB30_SEC_BCR>;
 		reset-names = "core_reset";
 
-		qcom,core-clk-rate = <60000000>;
+		qcom,core-clk-rate = <120000000>;
+		qcom,core-clk-rate-hs = <60000000>;
 		qcom,num-gsi-evt-buffs = <0x3>;
 		qcom,pm-qos-latency = <61>;
 		qcom,gsi-reg-offset =

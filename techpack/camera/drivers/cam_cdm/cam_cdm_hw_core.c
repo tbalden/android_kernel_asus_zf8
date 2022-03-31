@@ -26,6 +26,7 @@
 #include "camera_main.h"
 #include "cam_trace.h"
 #include "cam_req_mgr_workq.h"
+#include "cam_common_util.h"
 
 #define CAM_CDM_BL_FIFO_WAIT_TIMEOUT 2000
 #define CAM_CDM_DBG_GEN_IRQ_USR_DATA 0xff
@@ -74,6 +75,7 @@ static const struct of_device_id msm_cam_hw_cdm_dt_match[] = {
 		.compatible = CAM_HW_CDM_OPE_NAME_2_1,
 		.data = &cam_cdm_2_1_reg_offset,
 	},
+	{},
 };
 
 static enum cam_cdm_id cam_hw_cdm_get_id_by_name(char *name)
@@ -1214,8 +1216,10 @@ static void cam_hw_cdm_work(struct work_struct *work)
 		return;
 	}
 
-	cam_req_mgr_thread_switch_delay_detect(
-		payload->workq_scheduled_ts);
+	cam_common_util_thread_switch_delay_detect(
+		"CDM workq schedule",
+		payload->workq_scheduled_ts,
+		CAM_WORKQ_SCHEDULE_TIME_THRESHOLD);
 
 	CAM_DBG(CAM_CDM, "IRQ status=0x%x", payload->irq_status);
 	if (payload->irq_status &

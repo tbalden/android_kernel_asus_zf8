@@ -254,6 +254,7 @@ struct sde_crtc_misr_info {
  * @feature_list  : list of color processing features supported on a crtc
  * @active_list   : list of color processing features are active
  * @dirty_list    : list of color processing features are dirty
+ * @revalidate_mask : stores dirty flags to revalidate after idlepc
  * @ad_dirty      : list containing ad properties that are dirty
  * @ad_active     : list containing ad properties that are active
  * @crtc_lock     : crtc lock around create, destroy and access.
@@ -286,6 +287,7 @@ struct sde_crtc_misr_info {
  * @ltm_buf_free    : list of LTM buffers that are available
  * @ltm_buf_busy    : list of LTM buffers that are been used by HW
  * @ltm_hist_en     : flag to indicate whether LTM hist is enabled or not
+ * @ltm_merge_clear_pending : flag indicates merge mode bit needs to be cleared
  * @ltm_buffer_lock : muttx to protect ltm_buffers allcation and free
  * @ltm_lock        : Spinlock to protect ltm buffer_cnt, hist_en and ltm lists
  * @needs_hw_reset  : Initiate a hw ctl reset
@@ -347,6 +349,7 @@ struct sde_crtc {
 	spinlock_t spin_lock;
 	spinlock_t fevent_spin_lock;
 	bool kickoff_in_progress;
+	unsigned long revalidate_mask;
 
 	/* for handling internal event thread */
 	struct sde_crtc_event event_cache[SDE_CRTC_MAX_EVENT_COUNT];
@@ -376,6 +379,7 @@ struct sde_crtc {
 	struct list_head ltm_buf_free;
 	struct list_head ltm_buf_busy;
 	bool ltm_hist_en;
+	bool ltm_merge_clear_pending;
 	struct drm_msm_ltm_cfg_param ltm_cfg;
 	struct mutex ltm_buffer_lock;
 	spinlock_t ltm_lock;
@@ -421,6 +425,7 @@ enum sde_crtc_dirty_flags {
  * @property_values: Current crtc property values
  * @input_fence_timeout_ns : Cached input fence timeout, in ns
  * @num_dim_layers: Number of dim layers
+ * @cwb_enc_mask  : encoder mask populated during atomic_check if CWB is enabled
  * @dim_layer: Dim layer configs
  * @num_ds: Number of destination scalers to be configured
  * @num_ds_enabled: Number of destination scalers enabled
@@ -449,6 +454,7 @@ struct sde_crtc_state {
 	DECLARE_BITMAP(dirty, SDE_CRTC_DIRTY_MAX);
 	uint64_t input_fence_timeout_ns;
 	uint32_t num_dim_layers;
+	uint32_t cwb_enc_mask;
 	struct sde_hw_dim_layer dim_layer[SDE_MAX_DIM_LAYERS];
 	uint32_t num_ds;
 	uint32_t num_ds_enabled;
@@ -802,6 +808,22 @@ static inline bool sde_crtc_atomic_check_has_modeset(
 	return (crtc_state && drm_atomic_crtc_needs_modeset(crtc_state));
 }
 
+static inline bool sde_crtc_state_in_clone_mode(struct drm_encoder *encoder,
+	struct drm_crtc_state *state)
+{
+	struct sde_crtc_state *cstate;
+
+	if (!state || !encoder)
+		return false;
+
+	cstate = to_sde_crtc_state(state);
+	if (sde_encoder_in_clone_mode(encoder) ||
+		(cstate->cwb_enc_mask & drm_encoder_mask(encoder)))
+		return true;
+
+	return false;
+}
+
 /**
  * sde_crtc_get_secure_transition - determines the operations to be
  * performed before transitioning to secure state
@@ -925,9 +947,10 @@ void sde_crtc_static_cache_read_kickoff(struct drm_crtc *crtc);
  *				of primary connector
  * @crtc: Pointer to DRM crtc object
  * @connector: Pointer to DRM connector object of WB in CWB case
+ * @crtc_state:	Pointer to DRM crtc state
  */
 int sde_crtc_get_num_datapath(struct drm_crtc *crtc,
-		struct drm_connector *connector);
+	struct drm_connector *connector, struct drm_crtc_state *crtc_state);
 
 /**
  * sde_crtc_reset_sw_state - reset dirty proerties on crtc and
@@ -935,5 +958,11 @@ int sde_crtc_get_num_datapath(struct drm_crtc *crtc,
  * @crtc: Pointer to DRM crtc object
  */
 void sde_crtc_reset_sw_state(struct drm_crtc *crtc);
+
+/**
+ * _sde_crtc_clear_dim_layers_v1 - clear all dim layer settings
+ * @cstate:      Pointer to drm crtc state
+ */
+void _sde_crtc_clear_dim_layers_v1(struct drm_crtc_state *state);
 
 #endif /* _SDE_CRTC_H_ */

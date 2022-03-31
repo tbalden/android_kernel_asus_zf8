@@ -597,6 +597,12 @@ stmmac_probe_config_dt(struct platform_device *pdev, const char **mac)
 		dev_dbg(&pdev->dev, "PTP rate %d\n", plat->clk_ptp_rate);
 	}
 
+	of_property_read_u32(np,
+			     "snps,ptp-ref-clk-rate", &plat->clk_ptp_rate);
+
+	of_property_read_u32(np,
+			     "snps,ptp-req-clk-rate", &plat->clk_ptp_req_rate);
+
 	plat->stmmac_rst = devm_reset_control_get(&pdev->dev,
 						  STMMAC_RESOURCE_NAME);
 	if (IS_ERR(plat->stmmac_rst)) {
@@ -627,6 +633,8 @@ error_pclk_get:
 void stmmac_remove_config_dt(struct platform_device *pdev,
 			     struct plat_stmmacenet_data *plat)
 {
+	clk_disable_unprepare(plat->stmmac_clk);
+	clk_disable_unprepare(plat->pclk);
 	of_node_put(plat->phy_node);
 	of_node_put(plat->mdio_node);
 }

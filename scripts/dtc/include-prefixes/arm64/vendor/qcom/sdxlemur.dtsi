@@ -69,20 +69,9 @@
 			size = <0x400000>;
 		};
 
-
-		audio_mem: audio_region@0 {
-			compatible = "shared-dma-pool";
-			alloc-ranges = <0x00000000 0xffffffff>;
-			reusable;
-			size = <0x400000>;
-		};
-
-		cnss_wlan_mem: cnss_wlan_region {
-			compatible = "shared-dma-pool";
-			alloc-ranges = <0x00000000 0xffffffff>;
-			reusable;
-			alignment = <0x400000>;
-			size = <0x1400000>;
+		llcc_tcm_mem: llcc_tcm_region {
+			no-map;
+			reg = <0x15800000 0x800000>;
 		};
 	};
 
@@ -96,6 +85,7 @@
 			reg = <0x0>;
 			enable-method = "psci";
 			cpu-idle-states = <&A7_SPC &A7_PC &CX_MIN>;
+			#cooling-cells = <2>;
 		};
 	};
 
@@ -213,12 +203,12 @@
 	dcc: dcc_v2@117f000 {
 		compatible = "qcom,dcc-v2";
 		reg = <0x117f000 0x1000>,
-		      <0x1100000 0x2000>;
+		      <0x1100800 0x1800>;
 
 		qcom,transaction_timeout = <0>;
 
 		reg-names = "dcc-base", "dcc-ram-base";
-		dcc-ram-offset = <0x12000>;
+		dcc-ram-offset = <0x800>;
 
 		link_list1 {
 			qcom,curr-link-list = <2>;
@@ -244,6 +234,17 @@
 	pil_scm_pas {
 		compatible = "qcom,pil-tz-scm-pas";
 		interconnects = <&system_noc MASTER_CRYPTO &mc_virt SLAVE_EBI1>;
+	};
+
+	cpufreq: qcom,msm-cpufreq {
+		compatible = "qcom,msm-cpufreq";
+		clocks = <&apsscc APCS_MUX_CLK>;
+		clock-names = "cpu0_clk";
+		qcom,cpufreq-table =
+			<  345600 >,
+			<  576000 >,
+			<  1094400 >,
+			<  1497600 >;
 	};
 
 	qcom,msm-rtb {
@@ -289,6 +290,11 @@
 		etf_reg {
 			qcom,dump-size = <0x1000>;
 			qcom,dump-id = <0x102>;
+		};
+
+		tzpu_ctx0 {
+			qcom,dump-size = <0x800>;
+			qcom,dump-id = <0x00>;
 		};
 
 		misc_data {
@@ -411,6 +417,7 @@
 		interrupt-names = "eud_irq";
 		interrupt-parent = <&pdc>;
 		interrupts = <15 IRQ_TYPE_LEVEL_HIGH>;
+		interrupt-mask = <0x30>;
 		reg = <0xff0000 0x2000>,
 			<0xff2000 0x1000>;
 		reg-names = "eud_base", "eud_mode_mgr2";
@@ -573,6 +580,7 @@
 		clock-names = "core", "iface";
 
 		bus-width = <4>;
+		qcom,restore-after-cx-collapse;
 
 		/* DLL HSR settings. Refer go/hsr - <Target> DLL settings */
 		qcom,dll-hsr-list = <0x0007642c 0x0 0x10 0x2C010800 0x80040868>;
@@ -601,7 +609,7 @@
 			<   576000000 RPMH_REGULATOR_LEVEL_SVS>,
 			<  1094400000 RPMH_REGULATOR_LEVEL_NOM>,
 			<  1497600000 RPMH_REGULATOR_LEVEL_TURBO>;
-		#reset-cells = <1>;
+		#clock-cells = <1>;
 	};
 
 	apps_rsc: rsc@17830000 {
@@ -701,6 +709,7 @@
 		cap-based-alloc-and-pwr-collapse;
 		clocks = <&aopcc QDSS_CLK>;
 		clock-names = "aopcc_closks";
+		memory-region = <&llcc_tcm_mem>;
 	};
 
 	smem: qcom,smem {
@@ -793,6 +802,11 @@
 				};
 			};
 		};
+	};
+
+	qcom,mhi_dev_qrtr {
+		compatible = "qcom,qrtr-mhi-dev";
+		qcom,net-id = <3>;
 	};
 
 	qcom,glinkpkt {
@@ -888,6 +902,7 @@
 
 	ioss: qcom,ioss {
 		compatible = "qcom,ioss-v2";
+		qcom,max-ddr-bandwidth = <5000>;
 	};
 
 	pcie_ep: qcom,pcie@40002000 {
@@ -925,9 +940,11 @@
 		gdsc-vdd-supply = <&gcc_pcie_gdsc>;
 		vreg-1p8-supply = <&pmx65_l1>;
 		vreg-0p9-supply = <&pmx65_l4>;
+		vreg-mx-supply = <&VDD_MXA_LEVEL>;
 
-		qcom,vreg-1p8-voltage-level = <1200000 1200000 3000>;
+		qcom,vreg-1p8-voltage-level = <1200000 1200000 30000>;
 		qcom,vreg-0p9-voltage-level = <912000 912000 132000>;
+		qcom,vreg-mx-voltage-level = <RPMH_REGULATOR_LEVEL_MAX RPMH_REGULATOR_LEVEL_NOM 0>;
 
 		clocks = <&gcc GCC_PCIE_PIPE_CLK>,
 			<&gcc GCC_PCIE_CFG_AHB_CLK>,
@@ -961,13 +978,14 @@
 			qcom,pcie-vendor-id = /bits/ 16 <0x17cb>;
 			qcom,pcie-device-id = /bits/ 16 <0x0308>;
 			qcom,pcie-link-speed = <4>;
-			qcom,pcie-phy-ver = <6>;
+			qcom,pcie-phy-ver = <8>;
 			qcom,pcie-active-config;
 			qcom,pcie-aggregated-irq;
 			qcom,pcie-mhi-a7-irq;
 			qcom,phy-status-reg2 = <0x1214>;
 			qcom,mhi-soc-reset-offset = <0xb01b8>;
 			qcom,aoss-rst-clr;
+			qcom,aux-clk = <0x11>;
 
 			qcom,phy-init = <0x1240 0x01 0x0
 				0x100c 0x02 0x0
@@ -1000,7 +1018,7 @@
 				0x1168 0x0a 0x0
 				0x116c 0x04 0x0
 				0x119c 0x88 0x0
-				0x1174 0x20 0x0
+				0x1174 0x60 0x0
 				0x11a0 0x14 0x0
 				0x11a8 0x0f 0x0
 				0x0220 0x16 0x0
@@ -1104,6 +1122,8 @@
 				0x1584 0x28 0x0
 				0x1370 0x2e 0x0
 				0x155c 0x2e 0x0
+				0x1484 0x08 0x0
+				0x1388 0xaa 0x0
 				0x1200 0x00 0x0
 				0x1244 0x03 0x0>;
 
@@ -1114,7 +1134,7 @@
 		compatible = "qcom,msm-mhi-dev";
 		reg = <0x1c03000 0x1000>,
 			<0x3E28000 0x4>,
-			<0x3E28800 0x4>;
+			<0x3E28848 0x4>;
 			reg-names = "mhi_mmio_base", "ipa_uc_mbox_crdb",
 				"ipa_uc_mbox_erdb";
 			qcom,mhi-ep-msi = <0>;
@@ -1124,6 +1144,7 @@
 			interrupt-names = "mhi-device-inta";
 			qcom,mhi-ifc-id = <0x030817cb>;
 			qcom,mhi-interrupt;
+			qcom,no-m0-timeout;
 		status = "disabled";
 	};
 
@@ -1145,9 +1166,15 @@
 	};
 
 	ipa_eth_group1: ipa_eth_group1 {
-		qcom,iommu-dma-addr-pool = <0x80000000 0x0fe20000>;
+		qcom,iommu-dma-addr-pool = <0x80000000 0x07f00000>;
 		qcom,iommu-dma = "atomic";
 	};
+
+	ipa_eth_group2: ipa_eth_group2 {
+		qcom,iommu-dma-addr-pool = <0x87f10000 0x07f00000>;
+		qcom,iommu-dma = "atomic";
+	};
+
 
 	ipa_hw: qcom,ipa@03e00000 {
 		compatible = "qcom,ipa";
@@ -1165,56 +1192,56 @@
 		qcom,ipa-hw-mode = <0>;
 		qcom,platform-type = <0>; /* MDM platform */
 		qcom,ee = <0>;
+		qcom,entire-ipa-block-size = <0x200000>;
 		qcom,use-ipa-tethering-bridge;
+		qcom,use-tput-estmation-pipe;
 		qcom,mhi-event-ring-id-limits = <9 15>; /* start and end */
 		qcom,modem-cfg-emb-pipe-flt;
 		qcom,use-xbl-boot;
 		qcom,arm-smmu;
 		qcom,smmu-fast-map;
 		qcom,ipa-wdi3-over-gsi;
-		qcom,ipa-wdi3-holb-2g = <8>;
-		qcom,ipa-wdi3-holb-5g = <15>;
+		qcom,ipa-wdi3-holb-2g = <15>;
+		qcom,ipa-wdi3-holb-5g = <31>;
 		qcom,ipa-endp-delay-wa-v2;
 		qcom,tx-wrapper-cache-max-size = <400>;
 		qcom,ipa-gpi-event-rp-ddr;
-		qcom,ipa-uc-holb-monitor;
-		qcom,ipa-holb-monitor-poll-period = <5>;
-		qcom,ipa-holb-monitor-max-cnt-wlan = <10>;
-		qcom,ipa-holb-monitor-max-cnt-usb = <10>;
+		qcom,register-collection-on-crash;
+		qcom,testbus-collection-on-crash;
+		qcom,non-tn-collection-on-crash;
 		clock-names = "core_clk";
 		clocks = <&rpmhcc RPMH_IPA_CLK>;
 		qcom,interconnect,num-cases = <5>;
-		qcom,interconnect,num-paths = <4>;
+		qcom,interconnect,num-paths = <3>;
 		qcom,max_num_smmu_cb = <6>;
 		interconnects = <&system_noc MASTER_IPA &mem_noc SLAVE_LLCC>,
 		<&mc_virt MASTER_LLCC &mc_virt SLAVE_EBI1>,
-		<&system_noc MASTER_IPA &system_noc SLAVE_IMEM>,
 		<&mem_noc MASTER_APPSS_PROC &system_noc SLAVE_IPA_CFG>;
 
-		interconnect-names = "ipa_to_llcc", "llcc_to_ebi1", "ipa_to_imem", "appss_to_ipa";
+		interconnect-names = "ipa_to_llcc", "llcc_to_ebi1", "appss_to_ipa";
 		/* No vote */
 		qcom,no-vote =
-		<0 0 0 0 0 0 0 0>;
+		<0 0 0 0 0 0>;
 
 		/* SVS2 */
 		qcom,svs2 =
-		<150000 600000 150000 1804000 75000 300000 0 76800>;
+		<600000 0 600000 1900000 0 76800>;
 
 		/* SVS */
 		qcom,svs =
-		<625000 1200000 625000 3072000 312500 700000 0 150000>;
+		<1200000 0 1200000 2800000 0 150000>;
 
 		/* NOMINAL */
 		qcom,nominal =
-		<1250000 2400000 1250000 6220800 625000 1500000 0 400000>;
+		<2400000 0 2400000 5500000 0 400000>;
 
 		/* TURBO */
 		qcom,turbo =
-		<2000000 3500000 2000000 7219200 1000000 1920000 0 400000>;
+		<3600000 0 3600000 5500000 0 400000>;
 
 		qcom,bus-vector-names = "MIN", "SVS2", "SVS", "NOMINAL",
 		"TURBO";
-		qcom,throughput-threshold = <600 2500 5000>;
+		qcom,throughput-threshold = <3000 5000 10000>;
 		qcom,scaling-exceptions = <>;
 
 		ipa_smmu_ap: ipa_smmu_ap {
@@ -1224,6 +1251,7 @@
 			qcom,additional-mapping =
 				/* modem tables in IMEM */
 				<0x14688000 0x14688000 0x3000>;
+			qcom,iommu-geometry = <0x0 0xA0000000>;
 			qcom,iommu-dma = "fastmap";
 			qcom,ipa-q6-smem-size = <36864>;
 		};
@@ -1251,7 +1279,8 @@
 		ipa_smmu_eth1: ipa_smmu_eth1 {
 			compatible = "qcom,ipa-smmu-eth1-cb";
 			iommus = <&apps_smmu 0x5E4 0x0>;
-			qcom,iommu-dma = "atomic";
+			qcom,shared-cb;
+			qcom,iommu-group = <&ipa_eth_group2>;
 		};
 
 		ipa_smmu_wlan1: ipa_smmu_wlan1 {
@@ -1410,6 +1439,13 @@
 	qtee_shmbridge {
 		compatible = "qcom,tee-shared-memory-bridge";
 	};
+
+	sdx_ext_ipc: qcom,sdx_ext_ipc {
+		compatible = "qcom,sdx-ext-ipc";
+		qcom,status-in-gpio = <&tlmm 65 0x00>;
+		qcom,status-out-gpio = <&tlmm 44 0x00>;
+		qcom,status-out2-gpio = <&tlmm 45 0x00>;
+	};
 };
 
 #include "sdxlemur-pinctrl.dtsi"
@@ -1421,5 +1457,4 @@
 #include "sdxlemur-pm.dtsi"
 #include "sdxlemur-pcie.dtsi"
 #include "sdxlemur-blsp.dtsi"
-#include "sdxlemur-audio.dtsi"
 #include "sdxlemur-thermal.dtsi"

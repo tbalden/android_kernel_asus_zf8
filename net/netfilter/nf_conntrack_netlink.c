@@ -245,8 +245,8 @@ dump_counters(struct sk_buff *skb, struct nf_conn_acct *acct,
 		pkts = atomic64_xchg(&counter[dir].packets, 0);
 		bytes = atomic64_xchg(&counter[dir].bytes, 0);
 	} else {
-		pkts = atomic64_read(&counter[dir].packets);
-		bytes = atomic64_read(&counter[dir].bytes);
+		pkts = (u64)atomic64_read(&counter[dir].packets);
+		bytes = (u64)atomic64_read(&counter[dir].bytes);
 	}
 
 	nest_count = nla_nest_start(skb, attr);
@@ -1146,6 +1146,8 @@ ctnetlink_parse_tuple(const struct nlattr * const cda[],
 	if (!tb[CTA_TUPLE_IP])
 		return -EINVAL;
 
+	if (l3num != NFPROTO_IPV4 && l3num != NFPROTO_IPV6)
+		return -EOPNOTSUPP;
 	tuple->src.l3num = l3num;
 
 	err = ctnetlink_parse_tuple_ip(tb[CTA_TUPLE_IP], tuple);
@@ -2694,6 +2696,7 @@ static int ctnetlink_exp_dump_mask(struct sk_buff *skb,
 	memset(&m, 0xFF, sizeof(m));
 	memcpy(&m.src.u3, &mask->src.u3, sizeof(m.src.u3));
 	m.src.u.all = mask->src.u.all;
+	m.src.l3num = tuple->src.l3num;
 	m.dst.protonum = tuple->dst.protonum;
 
 	nest_parms = nla_nest_start(skb, CTA_EXPECT_MASK);

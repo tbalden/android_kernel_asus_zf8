@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
  */
 
 #ifndef _CAM_CPAS_API_H_
@@ -37,7 +37,7 @@ enum cam_cpas_reg_base {
 	CAM_CPAS_REG_MAX
 };
 
-#if defined ASUS_ZS673KS_PROJECT || defined ASUS_PICASSO_PROJECT || defined ASUS_SAKE_PROJECT || defined ASUS_VODKA_PROJECT
+
 /**
  * enum cam_cpas_hw_index  - Enum for identify HW index
  */
@@ -53,7 +53,7 @@ enum cam_cpas_hw_index {
 	CAM_CPAS_HW_IDX_7 = 1<<7,
 	CAM_CPAS_HW_IDX_MAX = 1<<8
 };
-#endif
+
 
 /**
  * enum cam_cpas_camera_version Enum for Titan Camera Versions
@@ -140,7 +140,9 @@ enum cam_cpas_hw_version {
 	CAM_CPAS_TITAN_580_V100 = 0x580100,
 	CAM_CPAS_TITAN_540_V100 = 0x540100,
 	CAM_CPAS_TITAN_520_V100 = 0x520100,
+	CAM_CPAS_TITAN_520_V110 = 0x520110,
 	CAM_CPAS_TITAN_545_V100 = 0x545100,
+	CAM_CPAS_TITAN_545_V110 = 0x545110,
 	CAM_CPAS_TITAN_570_V200 = 0x570200,
 	CAM_CPAS_TITAN_680_V100 = 0x680100,
 	CAM_CPAS_TITAN_MAX
@@ -641,6 +643,21 @@ int cam_cpas_get_cpas_hw_version(
 	uint32_t				 *hw_version);
 
 /**
+ * cam_cpas_get_camnoc_fifo_fill_level_info()
+ *
+ * @brief: API to get camera camnoc hw version
+ *
+ * @cpas_version: hw version
+ * @client_handle: cpas client handle
+ *
+ * @return 0 on success.
+ *
+ */
+int cam_cpas_get_camnoc_fifo_fill_level_info(
+	uint32_t                               cpas_version,
+	uint32_t                               client_handle);
+
+/**
  * cam_cpas_is_feature_supported()
  *
  * @brief: API to get camera features
@@ -654,13 +671,8 @@ int cam_cpas_get_cpas_hw_version(
  * @return 1 if feature is supported
  *
  */
-#if defined ASUS_ZS673KS_PROJECT || defined ASUS_PICASSO_PROJECT || defined ASUS_SAKE_PROJECT || defined ASUS_VODKA_PROJECT
 bool cam_cpas_is_feature_supported(uint32_t flag, uint32_t hw_map,
 	uint32_t *fuse_val);
-#else
-int cam_cpas_is_feature_supported(
-	uint32_t flag);
-#endif
 /**
  * cam_cpas_axi_util_path_type_to_string()
  *
@@ -720,11 +732,23 @@ int cam_cpas_select_qos_settings(uint32_t selection_mask);
  *
  * @identifier_string: Identifier string passed by caller
  * @identifier_value: Identifier value passed by caller
+ */
+int cam_cpas_notify_event(const char *identifier_string,
+	int32_t identifier_value);
+
+/*
+ * cam_cpas_hw_get_camnoc_fill_level_info()
+ *
+ * @brief: API to get camnoc info
+ *
+ * @cpas_version: cpas hw version
+ * @client_handle: cpas client handle
  *
  * @return 0 on success.
  *
  */
-int cam_cpas_notify_event(const char *identifier_string,
-	int32_t identifier_value);
+int cam_cpas_hw_get_camnoc_fill_level_info(
+	uint32_t cpas_version,
+	uint32_t client_handle);
 
 #endif /* _CAM_CPAS_API_H_ */

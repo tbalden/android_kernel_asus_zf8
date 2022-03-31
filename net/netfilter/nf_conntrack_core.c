@@ -1139,7 +1139,8 @@ nf_conntrack_tuple_taken(const struct nf_conntrack_tuple *tuple,
 			 * Let nf_ct_resolve_clash() deal with this later.
 			 */
 			if (nf_ct_tuple_equal(&ignored_conntrack->tuplehash[IP_CT_DIR_ORIGINAL].tuple,
-					      &ct->tuplehash[IP_CT_DIR_ORIGINAL].tuple))
+					      &ct->tuplehash[IP_CT_DIR_ORIGINAL].tuple) &&
+					      nf_ct_zone_equal(ct, zone, IP_CT_DIR_ORIGINAL))
 				continue;
 
 			NF_CT_STAT_INC_ATOMIC(net, found);
@@ -1888,8 +1889,8 @@ acct:
 					[CTINFO2DIR(ctinfo)].bytes);
 
 			pkts =
-			atomic64_read(&counter[CTINFO2DIR(ctinfo)].packets) +
-			atomic64_read(&counter[!CTINFO2DIR(ctinfo)].packets);
+			((u64)atomic64_read(&counter[CTINFO2DIR(ctinfo)].packets)) +
+			((u64)atomic64_read(&counter[!CTINFO2DIR(ctinfo)].packets));
 			/* Report if the packet threshold is reached. */
 			if (nf_conntrack_pkt_threshold > 0 &&
 			    pkts == nf_conntrack_pkt_threshold) {

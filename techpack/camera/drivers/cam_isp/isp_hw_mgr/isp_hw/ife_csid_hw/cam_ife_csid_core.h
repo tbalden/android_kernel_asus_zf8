@@ -76,11 +76,11 @@
 #define CAM_CSID_EVT_PAYLOAD_MAX                  10
 #define CAM_CSID_MIN_HBI_CFG_MAX_VAL              0xF
 
-#if defined ASUS_ZS673KS_PROJECT || defined ASUS_PICASSO_PROJECT || defined ASUS_SAKE_PROJECT || defined ASUS_VODKA_PROJECT
+
 #define CAM_CSID_RESOLUTION_22MP_WIDTH            5612
 #define CAM_CSID_RESOLUTION_25MP_WIDTH            6048
 #define CAM_CSID_RESOLUTION_28MP_WIDTH            7308
-#endif
+
 
 /* enum cam_csid_path_halt_mode select the path halt mode control */
 enum cam_csid_path_halt_mode {

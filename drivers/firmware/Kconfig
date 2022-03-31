@@ -260,6 +260,7 @@ config INTEL_STRATIX10_RSU
 config QCOM_SCM
 	tristate "Qualcomm Technologies, Inc. SCM Interface"
 	depends on ARM || ARM64
+	depends on HAVE_ARM_SMCCC
 	select RESET_CONTROLLER
 	help
 	  This option enables support for communicating with
@@ -269,7 +270,7 @@ config QCOM_SCM
 
 config QCOM_SCM_QCPE
 	bool "Para-Virtualized Secure Channel Manager (SCM) support over QCPE"
-	depends on QCOM_SCM
+	depends on QCOM_SCM && MSM_HAB
 	default n
 	help
 	  To enable Secure Channel Mananger(SCM) support for SoC

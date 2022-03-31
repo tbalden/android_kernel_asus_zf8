@@ -1,5 +1,4 @@
 #include "sdxlemur-mtp.dtsi"
-#include "sdxlemur-mtp-audio-overlay.dtsi"
 
 &soc {
 
@@ -23,6 +22,14 @@
 
 &mhi_net_device {
 	status = "ok";
+};
+
+&ipa_eth_group1 {
+	qcom,iommu-dma = "bypass";
+};
+
+&ipa_eth_group2 {
+	qcom,iommu-dma = "bypass";
 };
 
 &ipa_hw {
@@ -59,4 +66,7 @@
 
 &usb {
 	qcom,iommu-dma = "bypass";
+	dwc3@a600000 {
+		snps,usb2-gadget-lpm-disable;
+	};
 };

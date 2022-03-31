@@ -372,6 +372,10 @@ static void scmi_rx_callback(struct mbox_client *cl, void *m)
 
 	xfer = &minfo->xfer_block[xfer_id];
 
+	/* rx.len could be shrunk in the sync do_xfer, so reset to maxsz */
+	if (msg_type == MSG_TYPE_DELAYED_RESP)
+		xfer->rx.len = info->desc->max_msg_size;
+
 	scmi_dump_header_dbg(dev, &xfer->hdr);
 
 	scmi_fetch_response(xfer, mem);
@@ -481,6 +485,14 @@ int scmi_do_xfer(const struct scmi_handle *handle, struct scmi_xfer *xfer)
 	mbox_client_txdone(cinfo->chan, ret);
 
 	return ret;
+}
+
+void scmi_reset_rx_to_maxsz(const struct scmi_handle *handle,
+			    struct scmi_xfer *xfer)
+{
+	struct scmi_info *info = handle_to_scmi_info(handle);
+
+	xfer->rx.len = info->desc->max_msg_size;
 }
 
 #define SCMI_MAX_RESPONSE_TIMEOUT	(2 * MSEC_PER_SEC)

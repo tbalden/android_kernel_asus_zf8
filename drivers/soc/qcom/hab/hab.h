@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2016-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
  */
 #ifndef __HAB_H
 #define __HAB_H
@@ -55,6 +55,9 @@ enum hab_payload_type {
 #define DEVICE_DATA1_NAME "hab_data_network1"
 #define DEVICE_DATA2_NAME "hab_data_network2"
 #define DEVICE_HSI2S1_NAME "hab_hsi2s1"
+#define DEVICE_XVM1_NAME "hab_xvm1"
+#define DEVICE_XVM2_NAME "hab_xvm2"
+#define DEVICE_XVM3_NAME "hab_xvm3"
 
 /* make sure concascaded name is less than this value */
 #define MAX_VMID_NAME_SIZE 30
@@ -224,6 +227,7 @@ struct hab_export_ack_recvd {
 struct hab_message {
 	struct list_head node;
 	size_t sizebytes;
+	uint32_t sequence_rx;
 	uint32_t data[];
 };
 
@@ -341,6 +345,10 @@ struct virtual_channel {
 	 */
 	int closed;
 	int forked; /* if fork is detected and assume only once */
+	/* stats */
+	uint64_t tx_cnt; /* total succeeded tx */
+	uint64_t rx_cnt; /* total succeeded rx */
+	int rx_inflight; /* rx in progress/blocking */
 };
 
 /*

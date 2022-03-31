@@ -1,15 +1,15 @@
 #include <dt-bindings/clock/qcom,gcc-sm6150.h>
 #include <dt-bindings/clock/qcom,scc-sm6150.h>
-#include <dt-bindings/regulator/qcom,rpmh-regulator.h>
-#include <dt-bindings/regulator/qcom,rpmh-regulator-levels.h>
-#include <dt-bindings/interrupt-controller/arm-gic.h>
-#include <dt-bindings/gpio/gpio.h>
 #include "quin-vm-common.dtsi"
 
 / {
 	model = "Qualcomm Technologies, Inc. SA6155P Virtual Machine";
 	qcom,msm-name = "SA6155P";
 	qcom,msm-id = <377 0x0>;
+
+	aliases {
+		hsuart0 = &qupv3_se7_4uart;
+	};
 
 	cpus {
 		#address-cells = <2>;
@@ -109,6 +109,10 @@
 			};
 		};
 	};
+
+	aliases {
+		sdhc2 = &sdhc_2; /* SDC2 SD Card slot */
+	};
 };
 
 
@@ -121,6 +125,192 @@
 			= <RPMH_REGULATOR_LEVEL_RETENTION>;
 		regulator-max-microvolt
 			= <RPMH_REGULATOR_LEVEL_MAX>;
+	};
+
+	/* PWR_CTR1_VDD_1P8 supply */
+	vreg_conn_1p8: vreg_conn_1p8 {
+		compatible = "regulator-fixed";
+		regulator-name = "vreg_conn_1p8";
+		startup-delay-us = <4000>;
+		enable-active-high;
+		gpio = <&pm6155_1_gpios 1 0>;
+	};
+
+	/* PWR_CTR2_VDD_PA supply */
+	vreg_conn_pa: vreg_conn_pa {
+		compatible = "regulator-fixed";
+		regulator-name = "vreg_conn_pa";
+		startup-delay-us = <4000>;
+		enable-active-high;
+		gpio = <&pm6155_1_gpios 6 0>;
+	};
+
+	vreg_wlan: vreg_wlan {
+		compatible = "qcom,stub-regulator";
+		regulator-name = "vreg_wlan";
+	};
+
+	cnss_pcie: qcom,cnss-qca-converged {
+		compatible = "qcom,cnss-qca-converged";
+
+		qcom,converged-dt;
+		qcom,wlan-rc-num = <0>;
+		qcom,bus-type=<0>;
+		qcom,notify-modem-status;
+		qcom,msm-bus,name = "msm-cnss";
+		qcom,msm-bus,num-cases = <4>;
+		qcom,msm-bus,num-paths = <2>;
+		qcom,msm-bus,vectors-KBps =
+			<45 512 0 0>, <1 512 0 0>,
+			/* Upto 200 Mbps */
+			<45 512 41421 655360>, <1 512 41421 655360>,
+			/* Upto 400 Mbps */
+			<45 512 98572 655360>, <1 512 98572 1600000>,
+			/* Upto 800 Mbps */
+			<45 512 207108 1146880>, <1 512 207108 3124992>;
+
+		#address-cells=<1>;
+		#size-cells=<1>;
+		ranges = <0x10000000 0x10000000 0x10000000>,
+		      <0x20000000 0x20000000 0x10000>,
+		      <0xa0000000 0xa0000000 0x10000000>,
+		      <0xb0000000 0xb0000000 0x10000>;
+
+		vdd-wlan-ctrl1-supply = <&vreg_conn_pa>;
+		vdd-wlan-ctrl2-supply = <&vreg_conn_1p8>;
+		vdd-wlan-supply = <&vreg_wlan>;
+		vdd-wlan-rfa1-supply = <&pm6155_1_s6>;
+		vdd-wlan-rfa2-supply = <&pm6155_1_s5>;
+		vdd-wlan-rfa3-supply = <&pm6155_1_l15>;
+
+		wlan_vregs = "vdd-wlan-ctrl1", "vdd-wlan-ctrl2";
+		qcom,vdd-wlan-ctrl1-info = <0 0 0 0>;
+		qcom,vdd-wlan-ctrl2-info = <0 0 0 0>;
+
+		wlan-en-gpio = <&tlmm 98 0>;
+		pinctrl-names = "wlan_en_active", "wlan_en_sleep";
+		pinctrl-0 = <&cnss_wlan_en_active>;
+		pinctrl-1 = <&cnss_wlan_en_sleep>;
+
+		chip_cfg@0 {
+			reg = <0x10000000 0x10000000>,
+			    <0x20000000 0x10000>;
+			reg-names = "smmu_iova_base", "smmu_iova_ipa";
+
+			supported-ids = <0x003e>;
+			wlan_vregs = "vdd-wlan";
+			qcom,vdd-wlan-info = <0 0 0 10>;
+
+			qcom,smmu-s1-enable;
+			qcom,wlan-ramdump-dynamic = <0x200000>;
+		};
+
+		chip_cfg@1 {
+			reg = <0xa0000000 0x10000000>,
+			    <0xb0000000 0x10000>;
+			reg-names = "smmu_iova_base", "smmu_iova_ipa";
+
+			supported-ids = <0x1101>;
+			wlan_vregs = "vdd-wlan-rfa1", "vdd-wlan-rfa2",
+				   "vdd-wlan-rfa3";
+			qcom,vdd-wlan-rfa1-info = <1350000 1350000 0 0>;
+			qcom,vdd-wlan-rfa2-info = <2040000 2040000 0 0>;
+			qcom,vdd-wlan-rfa3-info = <1904000 1904000 0 0>;
+
+			qcom,wlan-ramdump-dynamic = <0x400000>;
+			mhi,max-channels = <30>;
+			mhi,timeout = <10000>;
+
+			mhi_channels {
+				mhi_chan@0 {
+					reg = <0>;
+					label = "LOOPBACK";
+					mhi,num-elements = <32>;
+					mhi,event-ring = <1>;
+					mhi,chan-dir = <1>;
+					mhi,data-type = <0>;
+					mhi,doorbell-mode = <2>;
+					mhi,ee = <0x14>;
+				};
+
+				mhi_chan@1 {
+					reg = <1>;
+					label = "LOOPBACK";
+					mhi,num-elements = <32>;
+					mhi,event-ring = <1>;
+					mhi,chan-dir = <2>;
+					mhi,data-type = <0>;
+					mhi,doorbell-mode = <2>;
+					mhi,ee = <0x14>;
+				};
+
+				mhi_chan@4 {
+					reg = <4>;
+					label = "DIAG";
+					mhi,num-elements = <32>;
+					mhi,event-ring = <1>;
+					mhi,chan-dir = <1>;
+					mhi,data-type = <0>;
+					mhi,doorbell-mode = <2>;
+					mhi,ee = <0x14>;
+				};
+
+				mhi_chan@5 {
+					reg = <5>;
+					label = "DIAG";
+					mhi,num-elements = <32>;
+					mhi,event-ring = <1>;
+					mhi,chan-dir = <2>;
+					mhi,data-type = <0>;
+					mhi,doorbell-mode = <2>;
+					mhi,ee = <0x14>;
+				};
+
+				mhi_chan@20 {
+					reg = <20>;
+					label = "IPCR";
+					mhi,num-elements = <32>;
+					mhi,event-ring = <1>;
+					mhi,chan-dir = <1>;
+					mhi,data-type = <1>;
+					mhi,doorbell-mode = <2>;
+					mhi,ee = <0x14>;
+					mhi,auto-start;
+				};
+
+				mhi_chan@21 {
+					reg = <21>;
+					label = "IPCR";
+					mhi,num-elements = <32>;
+					mhi,event-ring = <1>;
+					mhi,chan-dir = <2>;
+					mhi,data-type = <0>;
+					mhi,doorbell-mode = <2>;
+					mhi,ee = <0x14>;
+					mhi,auto-queue;
+					mhi,auto-start;
+				};
+			};
+
+			mhi_events {
+				mhi_event@0 {
+					mhi,num-elements = <32>;
+					mhi,intmod = <1>;
+					mhi,msi = <1>;
+					mhi,priority = <1>;
+					mhi,brstmode = <2>;
+					mhi,data-type = <1>;
+				};
+
+				mhi_event@1 {
+					mhi,num-elements = <256>;
+					mhi,intmod = <1>;
+					mhi,msi = <2>;
+					mhi,priority = <1>;
+					mhi,brstmode = <2>;
+				};
+			};
+		};
 	};
 
 	apps_smmu: apps-smmu@0x15000000 {
@@ -231,10 +421,72 @@
 	pdc: interrupt-controller@b220000 {
 		compatible = "qcom,sm6150-pdc";
 		reg = <0xb220000 0x30000>;
-		qcom,pdc-ranges = <6 486 1>, <8 488 4>;
+		qcom,pdc-ranges = <6 486 1>, <8 488 4>, <94 609 1>;
 		#interrupt-cells = <2>;
 		interrupt-parent = <&intc>;
 		interrupt-controller;
+	};
+
+	sdhc_2: sdhci@8804000 {
+		compatible = "qcom,sdhci-msm-v5";
+		reg = <0x8804000 0x1000>;
+		reg-names = "hc_mem";
+
+		interrupts = <GIC_SPI 204 IRQ_TYPE_LEVEL_HIGH>,
+			<GIC_SPI 222 IRQ_TYPE_LEVEL_HIGH>;
+		interrupt-names = "hc_irq", "pwr_irq";
+
+		clocks = <&gcc GCC_SDCC2_AHB_CLK>,
+			<&gcc GCC_SDCC2_APPS_CLK>;
+		clock-names = "iface", "core";
+
+		bus-width = <4>;
+		qcom,restore-after-cx-collapse;
+
+		qcom,msm-bus,name = "sdhc2";
+		qcom,msm-bus,num-cases = <6>;
+		qcom,msm-bus,num-paths = <2>;
+		qcom,msm-bus,vectors-KBps =
+			/* No vote */
+			<0 0>, <0 0>,
+			/* 25 MB/s */
+			<65360 100000>, <100000 100000>,
+			/* 50 MB/s */
+			<130718 200000>, <133320 133320>,
+			/* 100 MB/s */
+			<261438 200000>, <150000 150000>,
+			/* 200 MB/s */
+			<261438 400000>, <300000 300000>,
+			/* Max. bandwidth */
+			<1338562 4096000>, <1338562 4096000>;
+
+		/* DLL HSR settings. Refer go/hsr - <Target> DLL settings */
+		qcom,dll-hsr-list = <0x0007642c 0x0 0x10 0x2C010800 0x80040868>;
+
+		qcom,devfreq,freq-table = <50000000 201500000>;
+
+		vdd-supply = <&pm6155_1_l10>;
+		qcom,vdd-voltage-level = <2950000 2950000>;
+		qcom,vdd-current-level = <0 800000>;
+		vdd-io-supply = <&pm6155_1_l2>;
+		qcom,vdd-io-voltage-level = <1800000 3100000>;
+		qcom,vdd-io-current-level = <0 22000>;
+		pinctrl-names = "default", "sleep";
+		pinctrl-0 = <&sdc2_on>;
+		pinctrl-1 = <&sdc2_off>;
+
+		cd-gpios = <&tlmm 99 GPIO_ACTIVE_LOW>;
+		status = "disabled";
+
+		qos0 {
+			mask = <0x3f>;
+			vote = <44>;
+		};
+
+		qos1 {
+			mask = <0xc0>;
+			vote = <44>;
+		};
 	};
 
 	msm_gpu_hyp: qcom,hgsl {
@@ -242,6 +494,26 @@
 
 		/* 6155 have no Doorbell, only keep ifence */
 		db-off = <1>;
+	};
+
+	bluetooth: bt-qca-auto-converged {
+		compatible = "qcom,qca-auto-converged";
+		pinctrl-names = "default";
+		pinctrl-0 = <&bt_en_active>;
+		/* BT_EN */
+		qcom,bt-reset-gpio = <&tlmm 85 0>;
+		/* PWR_CTR1_VDD_PA */
+		qcom,bt-vdd-ctrl1-supply = <&vreg_conn_pa>;
+		/* PWR_CTR2_VDD_1P8 */
+		qcom,bt-vdd-ctrl2-supply = <&vreg_conn_1p8>;
+		qcom,bt-vdd-rfa1-supply = <&pm6155_1_s6>;
+		qcom,bt-vdd-rfa2-supply = <&pm6155_1_s5>;
+		qcom,bt-vdd-rfa3-supply = <&pm6155_1_l15>;
+
+		/* <vol_min, vol_max, load_curr, is_retention_supp> */
+		qcom,bt-vdd-rfa1-config = <1350000 1350000 0 0>;
+		qcom,bt-vdd-rfa2-config = <2040000 2040000 0 0>;
+		qcom,bt-vdd-rfa3-config = <1904000 1904000 0 0>;
 	};
 };
 
@@ -318,18 +590,22 @@
 #include "sa6155p-vm-pcie.dtsi"
 #include "sm6150-qupv3.dtsi"
 #include "sa8155-vm-audio.dtsi"
+#include "pm6155-vm.dtsi"
+#include "sa6155p-vm-cnss.dtsi"
 
 &tlmm {
-	/delete-property/ wakeup-parent;
+	qcom,gpio-irq-map = <99 94>;
 };
 
 &qupv3_0 {
 	/delete-property/ qcom,msm-bus,num-paths;
 	/delete-property/ qcom,msm-bus,vectors-bus-ids;
+	qcom,iommu-dma = "bypass";
 };
 
 &qupv3_1 {
 	/delete-property/ qcom,msm-bus,num-paths;
 	/delete-property/ qcom,msm-bus,vectors-bus-ids;
+	qcom,iommu-dma = "bypass";
 };
 

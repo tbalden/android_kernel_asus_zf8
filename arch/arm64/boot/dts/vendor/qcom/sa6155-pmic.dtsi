@@ -39,6 +39,33 @@
 	/delete-node/ rpmh-regulator-bobc1;
 };
 
+&cam_csiphy0 {
+	mipi-csi-vdd-supply = <&pm6155_1_l11>;
+	regulator-names = "gdscr", "mipi-csi-vdd";
+	rgltr-cntrl-support;
+	rgltr-min-voltage = <0 1232000>;
+	rgltr-max-voltage = <0 1232000>;
+	rgltr-load-current = <0 21800>;
+};
+
+&cam_csiphy1 {
+	mipi-csi-vdd-supply = <&pm6155_1_l11>;
+	regulator-names = "gdscr", "mipi-csi-vdd";
+	rgltr-cntrl-support;
+	rgltr-min-voltage = <0 1232000>;
+	rgltr-max-voltage = <0 1232000>;
+	rgltr-load-current = <0 21800>;
+};
+
+&cam_csiphy2 {
+	mipi-csi-vdd-supply = <&pm6155_1_l11>;
+	regulator-names = "gdscr", "mipi-csi-vdd";
+	rgltr-cntrl-support;
+	rgltr-min-voltage = <0 1232000>;
+	rgltr-max-voltage = <0 1232000>;
+	rgltr-load-current = <0 21800>;
+};
+
 &soc {
 		qcom,lpass@62400000 {
 			vdd_cx-supply = <&VDD_CX_LEVEL>;
@@ -61,3 +88,54 @@
 	vdda-0p9-supply = <&pm6155_1_l5>;
 };
 
+&thermal_zones {
+	pm6155-1-tz {
+		cooling-maps {
+			trip0_cpu0 {
+				trip = <&pm6155_trip0>;
+				cooling-device =
+					<&CPU0 THERMAL_MAX_LIMIT
+						THERMAL_MAX_LIMIT>;
+			};
+
+			trip0_cpu1 {
+				trip = <&pm6155_trip0>;
+				cooling-device = <&cpu1_isolate 1 1>;
+			};
+
+			trip0_cpu2 {
+				trip = <&pm6155_trip0>;
+				cooling-device = <&cpu2_isolate 1 1>;
+			};
+
+			trip0_cpu3 {
+				trip = <&pm6155_trip0>;
+				cooling-device = <&cpu3_isolate 1 1>;
+			};
+
+			trip0_cpu4 {
+				trip = <&pm6155_trip0>;
+				cooling-device = <&cpu4_isolate 1 1>;
+			};
+
+			trip0_cpu5 {
+				trip = <&pm6155_trip0>;
+				cooling-device = <&cpu5_isolate 1 1>;
+			};
+
+			trip0_cpu6 {
+				trip = <&pm6155_trip0>;
+				cooling-device = <&cpu6_isolate 1 1>;
+			};
+
+			trip0_cpu7 {
+				trip = <&pm6155_trip0>;
+				cooling-device = <&cpu7_isolate 1 1>;
+			};
+		};
+	};
+};
+
+&pm6155_1_rtc {
+	disable-alarm-wakeup;
+};

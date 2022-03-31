@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2016-2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
  */
 #include "hab.h"
 
@@ -33,6 +33,8 @@ hab_msg_alloc(struct physical_channel *pchan, size_t sizebytes)
 
 	message->sizebytes =
 		physical_channel_read(pchan, message->data, sizebytes);
+
+	message->sequence_rx = pchan->sequence_rx;
 
 	return message;
 }
@@ -161,13 +163,16 @@ static int hab_receive_create_export_ack(struct physical_channel *pchan,
 	if (sizebytes > sizeof(ack_recvd->ack)) {
 		pr_err("pchan %s read size too large %zd %zd\n",
 			pchan->name, sizebytes, sizeof(ack_recvd->ack));
+		kfree(ack_recvd);
 		return -EINVAL;
 	}
 
 	if (physical_channel_read(pchan,
 		&ack_recvd->ack,
-		sizebytes) != sizebytes)
+		sizebytes) != sizebytes) {
+		kfree(ack_recvd);
 		return -EIO;
+	}
 
 	hab_spin_lock(&ctx->expq_lock, irqs_disabled);
 	list_add_tail(&ack_recvd->node, &ctx->exp_rxq);

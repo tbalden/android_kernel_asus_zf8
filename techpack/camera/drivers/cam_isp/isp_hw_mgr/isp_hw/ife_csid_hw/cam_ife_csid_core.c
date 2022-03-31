@@ -78,6 +78,7 @@ static int cam_ife_csid_is_ipp_ppp_format_supported(
 	case CAM_FORMAT_DPCM_14_10_14:
 	case CAM_FORMAT_DPCM_12_10_12:
 	case CAM_FORMAT_YUV422:
+	case CAM_FORMAT_YUV422_10:
 		rc = 0;
 		break;
 	default:
@@ -260,6 +261,10 @@ static int cam_ife_csid_get_format_rdi(
 		*decode_fmt  = 0x1;
 		*plain_fmt = 0x0;
 		break;
+	case CAM_FORMAT_YUV422_10:
+		*decode_fmt  = 0x2;
+		*plain_fmt = 0x1;
+		break;
 	default:
 		rc = -EINVAL;
 		break;
@@ -341,6 +346,10 @@ static int cam_ife_csid_get_format_ipp_ppp(
 	case CAM_FORMAT_YUV422:
 		*decode_fmt  = 0x1;
 		*plain_fmt = 0;
+		break;
+	case CAM_FORMAT_YUV422_10:
+		*decode_fmt  = 0x2;
+		*plain_fmt = 0x1;
 		break;
 	default:
 		CAM_ERR(CAM_ISP, "Unsupported format %d",
@@ -1043,7 +1052,6 @@ end:
 	return rc;
 }
 
-#if defined ASUS_ZS673KS_PROJECT || defined ASUS_PICASSO_PROJECT || defined ASUS_SAKE_PROJECT || defined ASUS_VODKA_PROJECT
 bool cam_ife_csid_is_resolution_supported_by_fuse(uint32_t width)
 {
 	bool supported = true;
@@ -1059,8 +1067,7 @@ bool cam_ife_csid_is_resolution_supported_by_fuse(uint32_t width)
 
 	switch (hw_version) {
 	case CAM_CPAS_TITAN_570_V200:
-		cam_cpas_is_feature_supported(CAM_CPAS_MP_LIMIT_FUSE,
-			CAM_CPAS_HW_IDX_ANY, &fuse_val);
+		cam_cpas_is_feature_supported(CAM_CPAS_MP_LIMIT_FUSE,CAM_CPAS_HW_IDX_ANY, &fuse_val);
 		switch (fuse_val) {
 		case 0x0:
 			if (width > CAM_CSID_RESOLUTION_22MP_WIDTH) {
@@ -1153,7 +1160,6 @@ bool cam_ife_csid_is_resolution_supported(struct cam_ife_csid_hw *csid_hw,
 		supported = true;
 	return supported;
 }
-#endif
 int cam_ife_csid_path_reserve(struct cam_ife_csid_hw *csid_hw,
 	struct cam_csid_hw_reserve_resource_args  *reserve)
 {
@@ -1161,9 +1167,7 @@ int cam_ife_csid_path_reserve(struct cam_ife_csid_hw *csid_hw,
 	struct cam_ife_csid_path_cfg    *path_data;
 	struct cam_isp_resource_node    *res;
 	bool                             is_rdi = false;
-#if defined ASUS_ZS673KS_PROJECT || defined ASUS_PICASSO_PROJECT || defined ASUS_SAKE_PROJECT || defined ASUS_VODKA_PROJECT
 	uint32_t                         width = 0;
-#endif
 
 	/* CSID  CSI2 v2.0 supports 31 vc */
 	if (reserve->sync_mode >= CAM_ISP_HW_SYNC_MAX) {
@@ -1351,7 +1355,6 @@ int cam_ife_csid_path_reserve(struct cam_ife_csid_hw *csid_hw,
 
 	if (reserve->sync_mode == CAM_ISP_HW_SYNC_MASTER) {
 
-#if defined ASUS_ZS673KS_PROJECT || defined ASUS_PICASSO_PROJECT || defined ASUS_SAKE_PROJECT || defined ASUS_VODKA_PROJECT
 
 		width = reserve->in_port->left_stop -
 			reserve->in_port->left_start + 1;
@@ -1364,7 +1367,7 @@ int cam_ife_csid_path_reserve(struct cam_ife_csid_hw *csid_hw,
 			rc = -EINVAL;
 			goto end;
 		}
-#endif		
+
 		path_data->start_pixel = reserve->in_port->left_start;
 		path_data->end_pixel = reserve->in_port->left_stop;
 		path_data->width  = reserve->in_port->left_width;
@@ -1385,7 +1388,6 @@ int cam_ife_csid_path_reserve(struct cam_ife_csid_hw *csid_hw,
 			path_data->start_line, path_data->end_line);
 	} else if (reserve->sync_mode == CAM_ISP_HW_SYNC_SLAVE) {
 
-#if defined ASUS_ZS673KS_PROJECT || defined ASUS_PICASSO_PROJECT || defined ASUS_SAKE_PROJECT || defined ASUS_VODKA_PROJECT
 
 		width = reserve->in_port->right_stop -
 			reserve->in_port->right_start + 1;
@@ -1398,7 +1400,6 @@ int cam_ife_csid_path_reserve(struct cam_ife_csid_hw *csid_hw,
 			rc = -EINVAL;
 			goto end;
 		}
-#endif		
 		path_data->master_idx = reserve->master_idx;
 		CAM_DBG(CAM_ISP, "CSID:%d master_idx=%d",
 			csid_hw->hw_intf->hw_idx, path_data->master_idx);
@@ -1416,7 +1417,6 @@ int cam_ife_csid_path_reserve(struct cam_ife_csid_hw *csid_hw,
 			path_data->start_line, path_data->end_line);
 	} else {
 
-#if defined ASUS_ZS673KS_PROJECT || defined ASUS_PICASSO_PROJECT || defined ASUS_SAKE_PROJECT || defined ASUS_VODKA_PROJECT
 
 		width = reserve->in_port->left_stop -
 			reserve->in_port->left_start + 1;
@@ -1429,7 +1429,7 @@ int cam_ife_csid_path_reserve(struct cam_ife_csid_hw *csid_hw,
 			rc = -EINVAL;
 			goto end;
 		}
-#endif		
+
 		path_data->width  = reserve->in_port->left_width;
 		path_data->start_pixel = reserve->in_port->left_start;
 		path_data->end_pixel = reserve->in_port->left_stop;
@@ -1598,12 +1598,13 @@ static int cam_ife_csid_disable_hw(struct cam_ife_csid_hw *csid_hw)
 	cam_io_w_mb(0, soc_info->reg_map[0].mem_base +
 		csid_reg->cmn_reg->csid_top_irq_mask_addr);
 
+	cam_tasklet_stop(csid_hw->tasklet);
+
 	rc = cam_ife_csid_disable_soc_resources(soc_info);
 	if (rc)
 		CAM_ERR(CAM_ISP, "CSID:%d Disable CSID SOC failed",
 			csid_hw->hw_intf->hw_idx);
 
-	cam_tasklet_stop(csid_hw->tasklet);
 	spin_lock_irqsave(&csid_hw->lock_state, flags);
 	csid_hw->device_enabled = 0;
 	spin_unlock_irqrestore(&csid_hw->lock_state, flags);
@@ -1692,6 +1693,8 @@ static int cam_ife_csid_tpg_start(struct cam_ife_csid_hw   *csid_hw,
 		val = cam_io_r_mb(soc_info->reg_map[0].mem_base + 0x600);
 		CAM_DBG(CAM_ISP, "reg 0x%x = 0x%x", 0x600, val);
 	}
+
+	res->res_state = CAM_ISP_RESOURCE_STATE_STREAMING;
 
 	return 0;
 }
@@ -2073,8 +2076,10 @@ static int cam_ife_csid_init_config_pxl_path(
 	}
 
 	if (is_ipp && csid_hw->binning_supported &&
-		csid_hw->binning_enable)
+		csid_hw->binning_enable) {
 		val |= (1 << pxl_reg->quad_cfa_bin_en_shift_val);
+		val |= (1 << pxl_reg->horizontal_bin_en_shift_val);
+	}
 
 	val |= (1 << pxl_reg->pix_store_en_shift_val);
 	cam_io_w_mb(val, soc_info->reg_map[0].mem_base +
@@ -4248,6 +4253,8 @@ int cam_ife_csid_stop(void *hw_priv,
 		res->res_state = CAM_ISP_RESOURCE_STATE_INIT_HW;
 	}
 
+	csid_hw->error_irq_count = 0;
+
 	CAM_DBG(CAM_ISP,  "%s: Exit\n", __func__);
 
 	return rc;
@@ -4351,6 +4358,13 @@ static int cam_ife_csid_sof_irq_debug(
 		CAM_INFO(CAM_ISP, "SOF freeze: CSID SOF irq %s, CSID HW:%d",
 			(sof_irq_enable) ? "enabled" : "disabled",
 			csid_hw->hw_intf->hw_idx);
+
+	CAM_INFO(CAM_ISP, "Notify CSIPHY: %d",
+		csid_hw->csi2_rx_cfg.phy_sel);
+
+	cam_subdev_notify_message(CAM_CSIPHY_DEVICE_TYPE,
+		CAM_SUBDEV_MESSAGE_IRQ_ERR,
+		csid_hw->csi2_rx_cfg.phy_sel);
 
 	return 0;
 }
@@ -5633,7 +5647,7 @@ int cam_ife_csid_hw_probe_init(struct cam_hw_intf  *csid_hw_intf,
 	ife_csid_hw->is_resetting = false;
 	ife_csid_hw->hw_info->hw_state = CAM_HW_STATE_POWER_DOWN;
 
-#if defined ASUS_ZS673KS_PROJECT || defined ASUS_PICASSO_PROJECT || defined ASUS_SAKE_PROJECT || defined ASUS_VODKA_PROJECT
+
 	if (!cam_cpas_is_feature_supported(CAM_CPAS_ISP_FUSE,
 		(1 << ife_csid_hw->hw_intf->hw_idx), 0) ||
 		!cam_cpas_is_feature_supported(CAM_CPAS_ISP_LITE_FUSE,
@@ -5642,7 +5656,7 @@ int cam_ife_csid_hw_probe_init(struct cam_hw_intf  *csid_hw_intf,
 			ife_csid_hw->hw_intf->hw_idx);
 		return -ENODEV;
 	}
-#endif
+
 
 	mutex_init(&ife_csid_hw->hw_info->hw_mutex);
 	spin_lock_init(&ife_csid_hw->hw_info->hw_lock);
@@ -5666,12 +5680,9 @@ int cam_ife_csid_hw_probe_init(struct cam_hw_intf  *csid_hw_intf,
 		goto err;
 	}
 
-#if defined ASUS_ZS673KS_PROJECT || defined ASUS_PICASSO_PROJECT || defined ASUS_SAKE_PROJECT || defined ASUS_VODKA_PROJECT
+
 	if (cam_cpas_is_feature_supported(CAM_CPAS_QCFA_BINNING_ENABLE,
 		CAM_CPAS_HW_IDX_ANY, NULL))
-#else
-	if (cam_cpas_is_feature_supported(CAM_CPAS_QCFA_BINNING_ENABLE) == 1)
-#endif		
 		ife_csid_hw->binning_enable = 1;
 
 	ife_csid_hw->hw_intf->hw_ops.get_hw_caps = cam_ife_csid_get_hw_caps;

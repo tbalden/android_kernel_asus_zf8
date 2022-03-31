@@ -14,16 +14,16 @@
 		status = "disabled";
 	};
 
-	gcc_vcodec0_gdsc: qcom,gdsc@14580a8 {
+	gcc_vcodec0_gdsc: qcom,gdsc@14580ac {
 		compatible = "qcom,gdsc";
-		reg = <0x14580a8 0x4>;
+		reg = <0x14580ac 0x4>;
 		regulator-name = "gcc_vcodec0_gdsc";
 		status = "disabled";
 	};
 
-	gcc_venus_gdsc: qcom,gdsc@1458084 {
+	gcc_venus_gdsc: qcom,gdsc@1458088 {
 		compatible = "qcom,gdsc";
-		reg = <0x1458084 0x4>;
+		reg = <0x1458088 0x4>;
 		regulator-name = "gcc_venus_gdsc";
 		status = "disabled";
 	};
@@ -46,7 +46,7 @@
 
 	/* GDSCs in DISPCC */
 	mdss_core_gdsc: qcom,gdsc@5f03000 {
-		compatible = "regulator-fixed";
+		compatible = "qcom,gdsc";
 		reg = <0x5f03000 0x4>;
 		regulator-name = "mdss_core_gdsc";
 		proxy-supply = <&mdss_core_gdsc>;
@@ -71,7 +71,7 @@
 	};
 
 	gpu_cx_gdsc: qcom,gdsc@5994064 {
-		compatible = "regulator-fixed";
+		compatible = "qcom,gdsc";
 		reg = <0x5994064 0x4>;
 		regulator-name = "gpu_cx_gdsc";
 		hw-ctl-addr = <&gpu_cx_hw_ctrl>;
@@ -80,7 +80,7 @@
 	};
 
 	gpu_gx_gdsc: qcom,gdsc@599400c {
-		compatible = "regulator-fixed";
+		compatible = "qcom,gdsc";
 		reg = <0x599400c 0x4>;
 		regulator-name = "gpu_gx_gdsc";
 		sw-reset = <&gpu_gx_sw_reset>;

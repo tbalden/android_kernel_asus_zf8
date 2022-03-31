@@ -40,6 +40,7 @@
 		pci-domain1 = &pcie1; /* PCIe1 domain */
 		serial0 = &qupv3_se12_2uart;
 		hsuart0 = &qupv3_se13_4uart;
+		hsuart1 = &qupv3_se4_2uart;
 		spi22 = &qupv3_se22_spi;
 	};
 
@@ -57,6 +58,8 @@
 			dynamic-power-coefficient = <100>;
 			next-level-cache = <&L2_0>;
 			qcom,freq-domain = <&cpufreq_hw 0 4>;
+			qcom,lmh-dcvs = <&lmh_dcvs0>;
+			#cooling-cells = <2>;
 			L2_0: l2-cache {
 			      compatible = "arm,arch-cache";
 			      cache-level = <2>;
@@ -79,6 +82,7 @@
 			dynamic-power-coefficient = <100>;
 			next-level-cache = <&L2_1>;
 			qcom,freq-domain = <&cpufreq_hw 0 4>;
+			qcom,lmh-dcvs = <&lmh_dcvs0>;
 			L2_1: l2-cache {
 			      compatible = "arm,arch-cache";
 			      cache-level = <2>;
@@ -96,6 +100,7 @@
 			dynamic-power-coefficient = <100>;
 			next-level-cache = <&L2_2>;
 			qcom,freq-domain = <&cpufreq_hw 0 4>;
+			qcom,lmh-dcvs = <&lmh_dcvs0>;
 			L2_2: l2-cache {
 			      compatible = "arm,arch-cache";
 			      cache-level = <2>;
@@ -113,6 +118,7 @@
 			dynamic-power-coefficient = <100>;
 			next-level-cache = <&L2_3>;
 			qcom,freq-domain = <&cpufreq_hw 0 4>;
+			qcom,lmh-dcvs = <&lmh_dcvs0>;
 			L2_3: l2-cache {
 			      compatible = "arm,arch-cache";
 			      cache-level = <2>;
@@ -130,6 +136,8 @@
 			dynamic-power-coefficient = <374>;
 			next-level-cache = <&L2_4>;
 			qcom,freq-domain = <&cpufreq_hw 1 4>;
+			qcom,lmh-dcvs = <&lmh_dcvs1>;
+			#cooling-cells = <2>;
 			L2_4: l2-cache {
 			      compatible = "arm,arch-cache";
 			      cache-level = <2>;
@@ -147,6 +155,7 @@
 			dynamic-power-coefficient = <374>;
 			next-level-cache = <&L2_5>;
 			qcom,freq-domain = <&cpufreq_hw 1 4>;
+			qcom,lmh-dcvs = <&lmh_dcvs1>;
 			L2_5: l2-cache {
 			      compatible = "arm,arch-cache";
 			      cache-level = <2>;
@@ -164,6 +173,7 @@
 			dynamic-power-coefficient = <374>;
 			next-level-cache = <&L2_6>;
 			qcom,freq-domain = <&cpufreq_hw 1 4>;
+			qcom,lmh-dcvs = <&lmh_dcvs1>;
 			L2_6: l2-cache {
 			      compatible = "arm,arch-cache";
 			      cache-level = <2>;
@@ -181,6 +191,8 @@
 			dynamic-power-coefficient = <431>;
 			next-level-cache = <&L2_7>;
 			qcom,freq-domain = <&cpufreq_hw 2 4>;
+			qcom,lmh-dcvs = <&lmh_dcvs1>;
+			#cooling-cells = <2>;
 			L2_7: l2-cache {
 			      compatible = "arm,arch-cache";
 			      cache-level = <2>;
@@ -359,10 +371,8 @@
 
 		qseecom_mem: qseecom_region {
 			compatible = "shared-dma-pool";
-			alloc-ranges = <0x0 0x00000000 0x0 0xffffffff>;
-			reusable;
-			alignment = <0x0 0x400000>;
-			size = <0x0 0x1400000>;
+			no-map;
+			reg = <0x0 0x9e400000 0x0 0x1400000>;
 		};
 
 		cdsp_sec_mem: cdsp_sec_regions {
@@ -513,7 +523,7 @@
 		clock-frequency = <19200000>;
 	};
 
-	timer@0x17c20000 {
+	timer@17c20000 {
 		#address-cells = <1>;
 		#size-cells = <1>;
 		ranges;
@@ -521,7 +531,7 @@
 		reg = <0x17c20000 0x1000>;
 		clock-frequency = <19200000>;
 
-		frame@0x17c21000 {
+		frame@17c21000 {
 			frame-number = <0>;
 			interrupts = <0 8 0x4>,
 				     <0 6 0x4>;
@@ -1093,7 +1103,7 @@
 		status = "disabled";
 	};
 
-	cpucc: syscon@182a0018 {
+	cpucc: syscon@182a0000 {
 		compatible = "syscon";
 		reg = <0x182a0000 0x4>;
 	};
@@ -1228,7 +1238,7 @@
 	thermal_zones: thermal-zones {
 	};
 
-	osm_l3: interconnect@0x18321000 {
+	osm_l3: interconnect@18321000 {
 		reg = <0x18321000 0x1400>;
 		compatible = "qcom,sm8150-osm-l3";
 		clocks = <&rpmhcc RPMH_CXO_CLK>, <&gcc GPLL0>;
@@ -1462,26 +1472,12 @@
 		};
 	};
 
-	qupv3_id_1: geniqup@ac0000 {
-		compatible = "qcom,geni-se-qup";
-		reg = <0x00ac0000 0x6000>;
-		clock-names = "m-ahb", "s-ahb";
-		clocks = <&gcc GCC_QUPV3_WRAP_1_M_AHB_CLK>,
-			 <&gcc GCC_QUPV3_WRAP_1_S_AHB_CLK>;
-		ranges;
-		#address-cells = <2>;
-		#size-cells = <2>;
-		status = "ok";
-
-
-		uart2: serial@a90000 {
-			compatible = "qcom,geni-debug-uart";
-			reg = <0x0 0x00a90000 0x0 0x4000>;
-			clock-names = "se";
-			clocks = <&gcc GCC_QUPV3_WRAP1_S4_CLK>;
-			interrupts = <GIC_SPI 357 IRQ_TYPE_LEVEL_HIGH>;
-			status = "ok";
-		};
+	qcom,rmtfs_sharedmem@0 {
+		compatible = "qcom,sharedmem-uio";
+		reg = <0x0 0x200000>;
+		reg-names = "rmtfs";
+		qcom,client-id = <0x00000001>;
+		qcom,guard-memory;
 	};
 
 	tcsr_mutex_block: syscon@1f40000 {
@@ -2230,7 +2226,7 @@
 		mbox-names = "slpi-pil";
 	};
 
-	qcom,spss@1880000 {
+	qcom,spss@188101c {
 		compatible = "qcom,pil-tz-generic";
 		reg = <0x188101c 0x4>,
 		      <0x1881024 0x4>,
@@ -2444,182 +2440,182 @@
 		};
 
 		l1_icache0 {
-			qcom,dump-size = <0x8800>;
+			qcom,dump-size = <0x10900>;
 			qcom,dump-id = <0x60>;
 		};
 
 		l1_icache100 {
-			qcom,dump-size = <0x8800>;
+			qcom,dump-size = <0x10900>;
 			qcom,dump-id = <0x61>;
 		};
 
 		l1_icache200 {
-			qcom,dump-size = <0x8800>;
+			qcom,dump-size = <0x10900>;
 			qcom,dump-id = <0x62>;
 		};
 
 		l1_icache300 {
-			qcom,dump-size = <0x8800>;
+			qcom,dump-size = <0x10900>;
 			qcom,dump-id = <0x63>;
 		};
 
 		l1_icache400 {
-			qcom,dump-size = <0x11000>;
+			qcom,dump-size = <0x11100>;
 			qcom,dump-id = <0x64>;
 		};
 
 		l1_icache500 {
-			qcom,dump-size = <0x11000>;
+			qcom,dump-size = <0x11100>;
 			qcom,dump-id = <0x65>;
 		};
 
 		l1_icache600 {
-			qcom,dump-size = <0x11000>;
+			qcom,dump-size = <0x11100>;
 			qcom,dump-id = <0x66>;
 		};
 
 		l1_icache700 {
-			qcom,dump-size = <0x11000>;
+			qcom,dump-size = <0x11100>;
 			qcom,dump-id = <0x67>;
 		};
 
 		l1_dcache0 {
-			qcom,dump-size = <0x9000>;
+			qcom,dump-size = <0x9100>;
 			qcom,dump-id = <0x80>;
 		};
 
 		l1_dcache100 {
-			qcom,dump-size = <0x9000>;
+			qcom,dump-size = <0x9100>;
 			qcom,dump-id = <0x81>;
 		};
 
 		l1_dcache200 {
-			qcom,dump-size = <0x9000>;
+			qcom,dump-size = <0x9100>;
 			qcom,dump-id = <0x82>;
 		};
 
 		l1_dcache300 {
-			qcom,dump-size = <0x9000>;
+			qcom,dump-size = <0x9100>;
 			qcom,dump-id = <0x83>;
 		};
 
 		l1_dcache400 {
-			qcom,dump-size = <0x12000>;
+			qcom,dump-size = <0x12100>;
 			qcom,dump-id = <0x84>;
 		};
 
 		l1_dcache500 {
-			qcom,dump-size = <0x12000>;
+			qcom,dump-size = <0x12100>;
 			qcom,dump-id = <0x85>;
 		};
 
 		l1_dcache600 {
-			qcom,dump-size = <0x12000>;
+			qcom,dump-size = <0x12100>;
 			qcom,dump-id = <0x86>;
 		};
 
 		l1_dcache700 {
-			qcom,dump-size = <0x12000>;
+			qcom,dump-size = <0x12100>;
 			qcom,dump-id = <0x87>;
 		};
 
 		l1_itlb400 {
-			qcom,dump-size = <0x300>;
+			qcom,dump-size = <0x400>;
 			qcom,dump-id = <0x24>;
 		};
 
 		l1_itlb500 {
-			qcom,dump-size = <0x300>;
+			qcom,dump-size = <0x400>;
 			qcom,dump-id = <0x25>;
 		};
 
 		l1_itlb600 {
-			qcom,dump-size = <0x300>;
+			qcom,dump-size = <0x400>;
 			qcom,dump-id = <0x26>;
 		};
 
 		l1_itlb700 {
-			qcom,dump-size = <0x300>;
+			qcom,dump-size = <0x400>;
 			qcom,dump-id = <0x27>;
 		};
 
 		l1_dtlb400 {
-			qcom,dump-size = <0x480>;
+			qcom,dump-size = <0x580>;
 			qcom,dump-id = <0x44>;
 		};
 
 		l1_dtlb500 {
-			qcom,dump-size = <0x480>;
+			qcom,dump-size = <0x580>;
 			qcom,dump-id = <0x45>;
 		};
 
 		l1_dtlb600 {
-			qcom,dump-size = <0x480>;
+			qcom,dump-size = <0x580>;
 			qcom,dump-id = <0x46>;
 		};
 
 		l1_dtlb700 {
-			qcom,dump-size = <0x480>;
+			qcom,dump-size = <0x580>;
 			qcom,dump-id = <0x47>;
 		};
 
 		l2_cache400 {
-			qcom,dump-size = <0x88000>;
+			qcom,dump-size = <0x48100>;
 			qcom,dump-id = <0xc4>;
 		};
 
 		l2_cache500 {
-			qcom,dump-size = <0x88000>;
+			qcom,dump-size = <0x48100>;
 			qcom,dump-id = <0xc5>;
 		};
 
 		l2_cache600 {
-			qcom,dump-size = <0x88000>;
+			qcom,dump-size = <0x48100>;
 			qcom,dump-id = <0xc6>;
 		};
 
 		l2_cache700 {
-			qcom,dump-size = <0x110000>;
+			qcom,dump-size = <0x90100>;
 			qcom,dump-id = <0xc7>;
 		};
 
 		l2_tlb0 {
-			qcom,dump-size = <0x5000>;
+			qcom,dump-size = <0x5B00>;
 			qcom,dump-id = <0x120>;
 		};
 
 		l2_tlb100 {
-			qcom,dump-size = <0x5000>;
+			qcom,dump-size = <0x5B00>;
 			qcom,dump-id = <0x121>;
 		};
 
 		l2_tlb200 {
-			qcom,dump-size = <0x5000>;
+			qcom,dump-size = <0x5B00>;
 			qcom,dump-id = <0x122>;
 		};
 
 		l2_tlb300 {
-			qcom,dump-size = <0x5000>;
+			qcom,dump-size = <0x5B00>;
 			qcom,dump-id = <0x123>;
 		};
 
 		l2_tlb400 {
-			qcom,dump-size = <0x7800>;
+			qcom,dump-size = <0x7900>;
 			qcom,dump-id = <0x124>;
 		};
 
 		l2_tlb500 {
-			qcom,dump-size = <0x7800>;
+			qcom,dump-size = <0x7900>;
 			qcom,dump-id = <0x125>;
 		};
 
 		l2_tlb600 {
-			qcom,dump-size = <0x7800>;
+			qcom,dump-size = <0x7900>;
 			qcom,dump-id = <0x126>;
 		};
 
 		l2_tlb700 {
-			qcom,dump-size = <0x7800>;
+			qcom,dump-size = <0x7900>;
 			qcom,dump-id = <0x127>;
 		};
 	};
@@ -2875,3 +2871,4 @@
 #include "sm8150-usb.dtsi"
 #include "sm8150-gpu.dtsi"
 #include "sm8150-npu.dtsi"
+#include "sm8150-thermal.dtsi"

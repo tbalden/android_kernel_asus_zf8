@@ -26,13 +26,12 @@ static int cam_sensor_update_req_mgr(
 	int rc = 0;
 	struct cam_req_mgr_add_request add_req;
 
+	memset(&add_req, 0, sizeof(add_req));
 	add_req.link_hdl = s_ctrl->bridge_intf.link_hdl;
 	add_req.req_id = csl_packet->header.request_id;
 	CAM_DBG(CAM_SENSOR, " Rxed Req Id: %llu",
 		csl_packet->header.request_id);
 	add_req.dev_hdl = s_ctrl->bridge_intf.device_hdl;
-	add_req.skip_before_applying = 0;
-	add_req.trigger_eof = false;
 	if (s_ctrl->bridge_intf.crm_cb &&
 		s_ctrl->bridge_intf.crm_cb->add_req) {
 		rc = s_ctrl->bridge_intf.crm_cb->add_req(&add_req);
@@ -695,8 +694,9 @@ int cam_sensor_match_id(struct cam_sensor_ctrl_t *s_ctrl)
 	rc = camera_io_dev_read(
 		&(s_ctrl->io_master_info),
 		slave_info->sensor_id_reg_addr,
-		&chipid, CAMERA_SENSOR_I2C_TYPE_WORD,
-		CAMERA_SENSOR_I2C_TYPE_WORD);
+		&chipid,
+		s_ctrl->sensor_probe_addr_type,
+		s_ctrl->sensor_probe_data_type);
 
 	CAM_DBG(CAM_SENSOR, "read id: 0x%x expected id 0x%x:",
 		chipid, slave_info->sensor_id);

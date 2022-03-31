@@ -186,6 +186,7 @@
 				&ter_i2s_data1_active>;
 		pinctrl-1 = <&ter_i2s_sck_sleep &ter_i2s_data0_sleep
 				&ter_i2s_data1_sleep>;
+		#gpio-cells = <0>;
 		dai_tert_tdm_rx_0: qcom,msm-dai-q6-tdm-tert-rx-0 {
 			compatible = "qcom,msm-dai-q6-tdm";
 			qcom,msm-cpudai-tdm-dev-id = <36896>;
@@ -282,6 +283,7 @@
 		pinctrl-1 = <&quat_tdm_sclk_sleep &quat_tdm_ws_sleep
 				&quat_tdm_data0_sleep &quat_tdm_data1_sleep
 				&quat_tdm_data2_sleep &quat_tdm_data3_sleep>;
+		#gpio-cells = <0>;
 		dai_quat_tdm_rx_0: qcom,msm-dai-q6-tdm-quat-rx-0 {
 			compatible = "qcom,msm-dai-q6-tdm";
 			qcom,msm-cpudai-tdm-dev-id = <36912>;
@@ -365,9 +367,9 @@
 		qcom,msm-cpudai-tdm-group-port-id = <36928 36930 36932
 							36934 36942>;
 		qcom,msm-cpudai-tdm-clk-rate = <12288000>;
-		qcom,msm-cpudai-tdm-clk-internal = <0>;
+		qcom,msm-cpudai-tdm-clk-internal = <1>;
 		qcom,msm-cpudai-tdm-sync-mode = <1>;
-		qcom,msm-cpudai-tdm-sync-src = <0>;
+		qcom,msm-cpudai-tdm-sync-src = <1>;
 		qcom,msm-cpudai-tdm-data-out = <0>;
 		qcom,msm-cpudai-tdm-invert-sync = <0>;
 		qcom,msm-cpudai-tdm-data-delay = <0>;
@@ -376,6 +378,7 @@
 				&quin_tdm_data0_active &quin_tdm_data1_active>;
 		pinctrl-1 = <&quin_tdm_sclk_sleep &quin_tdm_ws_sleep
 				&quin_tdm_data0_sleep &quin_tdm_data1_sleep>;
+		#gpio-cells = <0>;
 		dai_quin_tdm_rx_0: qcom,msm-dai-q6-tdm-quin-rx-0 {
 			compatible = "qcom,msm-dai-q6-tdm";
 			qcom,msm-cpudai-tdm-dev-id = <36928>;
@@ -414,9 +417,9 @@
 		qcom,msm-cpudai-tdm-group-port-id = <36929 36931 36933
 							36935 36943>;
 		qcom,msm-cpudai-tdm-clk-rate = <12288000>;
-		qcom,msm-cpudai-tdm-clk-internal = <0>;
+		qcom,msm-cpudai-tdm-clk-internal = <1>;
 		qcom,msm-cpudai-tdm-sync-mode = <1>;
-		qcom,msm-cpudai-tdm-sync-src = <0>;
+		qcom,msm-cpudai-tdm-sync-src = <1>;
 		qcom,msm-cpudai-tdm-data-out = <0>;
 		qcom,msm-cpudai-tdm-invert-sync = <0>;
 		qcom,msm-cpudai-tdm-data-delay = <0>;
@@ -459,6 +462,14 @@
 			&pri_aux_pcm_data0_sleep &pri_aux_pcm_data1_sleep>;
 	};
 
+	internal_mclk2: qcom,msm-internal-mclk2 {
+		compatible = "qcom,msm-pcm-routing";
+		pinctrl-names = "default", "sleep";
+		pinctrl-0 = <&audio_internal_mclk2_active>;
+		pinctrl-1 = <&audio_internal_mclk2_sleep>;
+		#gpio-cells = <0>;
+	};
+
 qcom,msm-dai-q6 {
 		compatible = "qcom,msm-dai-q6";
 
@@ -491,6 +502,7 @@ qcom,msm-dai-q6 {
 		qcom,tert-tdm-gpios = <&tdm_tert_rx>;
 		qcom,quat-tdm-gpios = <&tdm_quat_rx>;
 		qcom,quin-tdm-gpios = <&tdm_quin_rx>;
+		qcom,internal-mclk2-gpios = <&internal_mclk2>;
 
 		asoc-platform = <&pcm0>, <&pcm1>, <&pcm2>, <&voip>, <&voice>,
 				<&loopback>, <&compress>, <&hostless>,
@@ -505,9 +517,12 @@ qcom,msm-dai-q6 {
 				"msm-pcm-dsp-noirq", "msm-pcm-loopback.1",
 				"msm-pcm-dtmf";
 		asoc-cpu = <&dai_hdmi>, <&dai_dp>,
-				<&dai_mi2s0>, <&dai_mi2s1>,
-				<&dai_mi2s2>, <&dai_mi2s3>,
-				<&dai_mi2s4>, <&dai_pri_auxpcm>,
+				<&dai_mi2s0_rx>, <&dai_mi2s0_tx>,
+				<&dai_mi2s1_rx>, <&dai_mi2s1_tx>,
+				<&dai_mi2s2_rx>, <&dai_mi2s2_tx>,
+				<&dai_mi2s3_rx>, <&dai_mi2s3_tx>,
+				<&dai_mi2s4_rx>, <&dai_mi2s4_tx>,
+				<&dai_pri_auxpcm>,
 				<&dai_sec_auxpcm>, <&dai_tert_auxpcm>,
 				<&dai_quat_auxpcm>, <&dai_quin_auxpcm>,
 				<&afe_pcm_rx>, <&afe_pcm_tx>,
@@ -541,9 +556,11 @@ qcom,msm-dai-q6 {
 				<&dai_quin_tdm_tx_2>, <&dai_quin_tdm_tx_3>,
 				<&dai_quin_tdm_tx_7>;
 		asoc-cpu-names = "msm-dai-q6-hdmi.8",  "msm-dai-q6-dp.0",
-				"msm-dai-q6-mi2s.0", "msm-dai-q6-mi2s.1",
-				"msm-dai-q6-mi2s.2", "msm-dai-q6-mi2s.3",
-				"msm-dai-q6-mi2s.4", "msm-dai-q6-auxpcm.1",
+				"msm-dai-q6-mi2s.1", "msm-dai-q6-mi2s.2",
+				"msm-dai-q6-mi2s.3", "msm-dai-q6-mi2s.4",
+				"msm-dai-q6-mi2s.5", "msm-dai-q6-mi2s.6",
+				"msm-dai-q6-mi2s.7", "msm-dai-q6-mi2s.8",
+				"msm-dai-q6-mi2s.9", "msm-dai-q6-auxpcm.1",
 				"msm-dai-q6-auxpcm.2", "msm-dai-q6-auxpcm.3",
 				"msm-dai-q6-auxpcm.4", "msm-dai-q6-auxpcm.5",
 				"msm-dai-q6-dev.224", "msm-dai-q6-dev.225",

@@ -4664,6 +4664,7 @@
 		qcom,use-64-bit-dma-mask;
 		qcom,ipa-endp-delay-wa;
 		qcom,lan-rx-napi;
+		qcom,lan-rx-ring-size = <224>;
 		qcom,tx-napi;
 		qcom,wan-use-skb-page;
 		qcom,rmnet-ctl-enable;
@@ -4706,7 +4707,7 @@
 		qcom,bus-vector-names = "MIN", "SVS2", "SVS", "NOMINAL",
 			"TURBO";
 		qcom,throughput-threshold = <600 2500 5000>;
-		qcom,scaling-exceptions = <>;
+		qcom,scaling-exceptions = "wdi", "100", "600", "1200";
 
 		/* smp2p information */
 		qcom,smp2p_map_ipa_1_out {
@@ -5397,6 +5398,7 @@
 		reg-names = "smmu_iova_ipa", "tcs_cmd";
 		wlan-en-gpio = <&tlmm 64 0>;
 		qcom,bt-en-gpio = <&tlmm 65 0>;
+		qcom,sw-ctrl-gpio = <&tlmm 153 0>;
 		pinctrl-names = "wlan_en_active", "wlan_en_sleep";
 		pinctrl-0 = <&cnss_wlan_en_active>;
 		pinctrl-1 = <&cnss_wlan_en_sleep>;
@@ -5419,6 +5421,8 @@
 		qcom,vdd-wlan-rfa1-config = <1880000 1880000 0 0 1>;
 		vdd-wlan-rfa2-supply = <&S12B>;
 		qcom,vdd-wlan-rfa2-config = <1350000 1350000 0 0 1>;
+		wlan-ant-switch-supply = <&L7E>;
+		qcom,wlan-ant-switch-config = <2800000 2800000 0 0 0>;
 
 		interconnects =
 		<&aggre2_noc MASTER_PCIE_0 &aggre2_noc SLAVE_ANOC_PCIE_GEM_NOC>,
@@ -5671,7 +5675,7 @@
 		qcom,bt-vdd-dig-config = <950000 950000 0 1>;
 		qcom,bt-vdd-rfa1-config = <1880000 1880000 0 1>;
 		qcom,bt-vdd-rfa2-config = <1350000 1350000 0 1>;
-              qcom,bt-vdd-asd-config = <2800000 2800000 0 1>;
+		qcom,bt-vdd-asd-config = <2800000 2800000 0 1>;
 	};
 
 	wil6210: qcom,wil6210 {

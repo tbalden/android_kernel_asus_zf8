@@ -13,13 +13,26 @@
 	};
 };
 
+#include "display/sdmshrike-vm-lv-display.dtsi"
+
 &usb0 {
 	status = "ok";
 };
 
-&usb1 {
-	qcom,default-mode-host;
+&usb2_phy0 {
 	status = "ok";
+};
+
+&qupv3_se13_4uart {
+	status = "ok";
+};
+
+&qupv3_se4_4uart {
+	status = "ok";
+};
+
+&linux_cma {
+	size = <0x0 0x3c00000>;
 };
 
 &pcie0_msi {
@@ -35,5 +48,16 @@
 };
 
 &pcie2 {
+	status = "ok";
+};
+
+#include "sa8195-vm-lv-cnss-lxc.dtsi"
+#include "sa8195-vm-ufs.dtsi"
+
+&ufs2phy_mem {
+	status = "ok";
+};
+
+&ufshc2_mem {
 	status = "ok";
 };

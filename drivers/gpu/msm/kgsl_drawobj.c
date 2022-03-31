@@ -262,11 +262,39 @@ static void drawobj_sync_timeline_fence_work(struct irq_work *work)
 	kgsl_drawobj_put(&event->syncobj->base);
 }
 
+static void trace_syncpoint_timeline_fence(struct kgsl_drawobj_sync *syncobj,
+	struct dma_fence *f, bool expire)
+{
+	struct dma_fence_array *array = to_dma_fence_array(f);
+	struct dma_fence **fences = &f;
+	u32 num_fences = 1;
+	int i;
+
+	if (array) {
+		num_fences = array->num_fences;
+		fences = array->fences;
+	}
+
+	for (i = 0; i < num_fences; i++) {
+		char fence_name[KGSL_FENCE_NAME_LEN];
+
+		snprintf(fence_name, sizeof(fence_name), "%s:%llu",
+			fences[i]->ops->get_timeline_name(fences[i]),
+			fences[i]->seqno);
+		if (expire)
+			trace_syncpoint_fence_expire(syncobj, fence_name);
+		else
+			trace_syncpoint_fence(syncobj, fence_name);
+	}
+}
+
 static void drawobj_sync_timeline_fence_callback(struct dma_fence *f,
 		struct dma_fence_cb *cb)
 {
 	struct kgsl_drawobj_sync_event *event = container_of(cb,
 		struct kgsl_drawobj_sync_event, cb);
+
+	trace_syncpoint_timeline_fence(event->syncobj, f, true);
 
 	/*
 	 * Mark the event as synced and then fire off a worker to handle
@@ -494,9 +522,11 @@ static int drawobj_add_sync_timeline(struct kgsl_device *device,
 		}
 
 		kgsl_drawobj_put(drawobj);
+		return ret;
 	}
 
-	return ret;
+	trace_syncpoint_timeline_fence(event->syncobj, event->fence, false);
+	return 0;
 }
 
 static int drawobj_add_sync_fence(struct kgsl_device *device,
@@ -685,6 +715,7 @@ static void add_profiling_buffer(struct kgsl_device *device,
 {
 	struct kgsl_mem_entry *entry;
 	struct kgsl_drawobj *drawobj = DRAWOBJ(cmdobj);
+	u64 start;
 
 	if (!(drawobj->flags & KGSL_DRAWOBJ_PROFILING))
 		return;
@@ -701,7 +732,14 @@ static void add_profiling_buffer(struct kgsl_device *device,
 			gpuaddr);
 
 	if (entry != NULL) {
-		if (!kgsl_gpuaddr_in_memdesc(&entry->memdesc, gpuaddr, size)) {
+		start = id ? (entry->memdesc.gpuaddr + offset) : gpuaddr;
+		/*
+		 * Make sure there is enough room in the object to store the
+		 * entire profiling buffer object
+		 */
+		if (!kgsl_gpuaddr_in_memdesc(&entry->memdesc, gpuaddr, size) ||
+			!kgsl_gpuaddr_in_memdesc(&entry->memdesc, start,
+				sizeof(struct kgsl_drawobj_profiling_buffer))) {
 			kgsl_mem_entry_put(entry);
 			entry = NULL;
 		}
@@ -714,28 +752,7 @@ static void add_profiling_buffer(struct kgsl_device *device,
 		return;
 	}
 
-
-	if (!id) {
-		cmdobj->profiling_buffer_gpuaddr = gpuaddr;
-	} else {
-		u64 off = offset + sizeof(struct kgsl_drawobj_profiling_buffer);
-
-		/*
-		 * Make sure there is enough room in the object to store the
-		 * entire profiling buffer object
-		 */
-		if (off < offset || off >= entry->memdesc.size) {
-			dev_err(device->dev,
-				"ignore invalid profile offset ctxt %d id %d offset %lld gpuaddr %llx size %lld\n",
-			drawobj->context->id, id, offset, gpuaddr, size);
-			kgsl_mem_entry_put(entry);
-			return;
-		}
-
-		cmdobj->profiling_buffer_gpuaddr =
-			entry->memdesc.gpuaddr + offset;
-	}
-
+	cmdobj->profiling_buffer_gpuaddr = start;
 	cmdobj->profiling_buf_entry = entry;
 }
 
@@ -900,6 +917,7 @@ err:
 		kgsl_timeline_put(timelineobj->timelines[i].timeline);
 
 	kvfree(timelineobj->timelines);
+	timelineobj->timelines = NULL;
 	return ret;
 }
 

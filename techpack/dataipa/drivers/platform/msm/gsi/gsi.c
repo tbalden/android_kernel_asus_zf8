@@ -38,6 +38,14 @@
 
 #define GSI_STTS_REG_BITS 32
 
+#define GSI_INST_RAM_FW_VER_OFFSET			(0)
+#define GSI_INST_RAM_FW_VER_HW_MASK			(0xFC00)
+#define GSI_INST_RAM_FW_VER_HW_SHIFT		(10)
+#define GSI_INST_RAM_FW_VER_FLAVOR_MASK		(0x380)
+#define GSI_INST_RAM_FW_VER_FLAVOR_SHIFT	(7)
+#define GSI_INST_RAM_FW_VER_FW_MASK			(0x7f)
+#define GSI_INST_RAM_FW_VER_FW_SHIFT		(0)
+
 #ifndef CONFIG_DEBUG_FS
 void gsi_debugfs_init(void)
 {
@@ -598,8 +606,7 @@ static void gsi_process_evt_re(struct gsi_evt_ctx *ctx,
 	/* RMB before reading event ring shared b/w IPA h/w & driver
 	 * ordering between IPA h/w store and CPU load
 	 */
-	if (callback)
-		dma_rmb();
+	dma_rmb();
 	evt = (struct gsi_xfer_compl_evt *)(ctx->ring.base_va +
 			ctx->ring.rp_local - ctx->ring.base);
 	gsi_process_chan(evt, notify, callback);
@@ -1360,10 +1367,6 @@ int gsi_register_device(struct gsi_per_props *props, unsigned long *dev_hdl)
 		gsi_writel(0, gsi_ctx->base +
 			GSI_EE_n_ERROR_LOG_OFFS(gsi_ctx->per.ee));
 
-	/* Reset to zero scratch_1 register*/
-	gsi_writel(0, gsi_ctx->base +
-			GSI_EE_n_CNTXT_SCRATCH_1_OFFS(gsi_ctx->per.ee));
-
 	if (running_emulation) {
 		/*
 		 * Set up the emulator's interrupt controller...
@@ -1821,6 +1824,7 @@ int gsi_alloc_evt_ring(struct gsi_evt_ring_props *props, unsigned long dev_hdl,
 		((op << GSI_EE_n_EV_CH_CMD_OPCODE_SHFT) &
 			GSI_EE_n_EV_CH_CMD_OPCODE_BMSK));
 	ee = gsi_ctx->per.ee;
+	GSIDBG("Sending alloc evt command for %lu\n", evt_id);
 	gsi_writel(val, gsi_ctx->base +
 			GSI_EE_n_EV_CH_CMD_OFFS(ee));
 	res = wait_for_completion_timeout(&ctx->compl, GSI_CMD_TIMEOUT);
@@ -3036,7 +3040,14 @@ EXPORT_SYMBOL(gsi_query_channel_db_addr);
 
 int gsi_pending_irq_type(void)
 {
-	int ee = gsi_ctx->per.ee;
+	int ee;
+
+	if (!gsi_ctx->per_registered) {
+		GSIERR("no client registered\n");
+		return 0;
+	}
+
+	ee = gsi_ctx->per.ee;
 
 	return gsi_readl(gsi_ctx->base +
 		GSI_EE_n_CNTXT_TYPE_IRQ_OFFS(ee));
@@ -3198,6 +3209,7 @@ int gsi_stop_channel(unsigned long chan_hdl)
 	int res;
 	uint32_t val;
 	struct gsi_chan_ctx *ctx;
+	unsigned long flags;
 
 	if (!gsi_ctx) {
 		pr_err("%s:%d gsi context not allocated\n", __func__, __LINE__);
@@ -3262,6 +3274,15 @@ int gsi_stop_channel(unsigned long chan_hdl)
 		GSIERR("chan=%lu busy try again\n", chan_hdl);
 		res = -GSI_STATUS_AGAIN;
 		goto free_lock;
+	}
+
+	/* If channel is stopped succesfully and has an event with IRQ type MSI
+		- clear IEOB */
+	if (ctx->evtr && ctx->evtr->props.intr == GSI_INTR_MSI) {
+		spin_lock_irqsave(&ctx->evtr->ring.slock, flags);
+		gsi_writel(1 << ctx->evtr->id, gsi_ctx->base +
+			GSI_EE_n_CNTXT_SRC_IEOB_IRQ_CLR_OFFS(gsi_ctx->per.ee));
+		spin_unlock_irqrestore(&ctx->evtr->ring.slock, flags);
 	}
 
 	res = GSI_STATUS_SUCCESS;
@@ -3637,6 +3658,7 @@ EXPORT_SYMBOL(gsi_query_channel_info);
 int gsi_is_channel_empty(unsigned long chan_hdl, bool *is_empty)
 {
 	struct gsi_chan_ctx *ctx;
+	struct gsi_evt_ctx *ev_ctx;
 	spinlock_t *slock;
 	unsigned long flags;
 	uint64_t rp;
@@ -3672,8 +3694,11 @@ int gsi_is_channel_empty(unsigned long chan_hdl, bool *is_empty)
 	spin_lock_irqsave(slock, flags);
 
 	if (ctx->props.dir == GSI_CHAN_DIR_FROM_GSI && ctx->evtr) {
-		rp = gsi_readl(gsi_ctx->base +
-			GSI_EE_n_EV_CH_k_CNTXT_4_OFFS(ctx->evtr->id, ee));
+		ev_ctx = &gsi_ctx->evtr[ctx->evtr->id];
+		/* Read the event ring rp from DDR to avoid mismatch */
+		rp = ev_ctx->props.gsi_read_event_ring_rp(&ev_ctx->props,
+					ev_ctx->id, ee);
+
 		rp |= ctx->evtr->ring.rp & 0xFFFFFFFF00000000;
 		ctx->evtr->ring.rp = rp;
 
@@ -4475,6 +4500,45 @@ void gsi_get_inst_ram_offset_and_size(unsigned long *base_offset,
 }
 EXPORT_SYMBOL(gsi_get_inst_ram_offset_and_size);
 
+/*
+ * Dumping the Debug registers for halt issue debugging.
+ */
+static void gsi_dump_halt_debug_reg(unsigned int chan_idx, unsigned int ee)
+{
+	uint32_t val;
+	enum gsi_chan_state curr_state = GSI_CHAN_STATE_NOT_ALLOCATED;
+
+	GSIERR("DEBUG_PC_FOR_DEBUG = 0x%x\n", gsi_readl(gsi_ctx->base +
+			GSI_EE_n_GSI_DEBUG_PC_FOR_DEBUG_OFFS));
+
+	GSIERR("GSI_DEBUG_BUSY_REG 0x%x\n",
+		gsi_readl(gsi_ctx->base + GSI_EE_n_GSI_DEBUG_BUSY_REG_OFFS));
+
+	GSIERR("GSI_EE_n_CNTXT_GLOB_IRQ_EN_OFFS = 0x%x\n",
+		gsi_readl(gsi_ctx->base +
+			GSI_EE_n_CNTXT_GLOB_IRQ_EN_OFFS(gsi_ctx->per.ee)));
+
+	GSIERR("GSI_EE_n_CNTXT_GLOB_IRQ_STTS_OFFS IRQ type = 0x%x\n",
+		gsi_readl(gsi_ctx->base +
+			GSI_EE_n_CNTXT_GLOB_IRQ_STTS_OFFS(gsi_ctx->per.ee)));
+
+	GSIERR("GSI_EE_n_CNTXT_SCRATCH_0_OFFS = 0x%x\n",
+		gsi_readl(gsi_ctx->base +
+			GSI_EE_n_CNTXT_SCRATCH_0_OFFS(gsi_ctx->per.ee)));
+
+	if (gsi_ctx->per.ver >= GSI_VER_2_9)
+		GSIERR("GSI_EE_n_GSI_CH_k_SCRATCH_4_OFFS = 0x%x\n",
+			gsi_readl(gsi_ctx->base +
+			GSI_EE_n_GSI_CH_k_SCRATCH_4_OFFS(chan_idx, ee)));
+
+	val = gsi_readl(gsi_ctx->base +
+			GSI_EE_n_GSI_CH_k_CNTXT_0_OFFS(chan_idx, ee));
+	curr_state = (val &
+			GSI_EE_n_GSI_CH_k_CNTXT_0_CHSTATE_BMSK) >>
+		GSI_EE_n_GSI_CH_k_CNTXT_0_CHSTATE_SHFT;
+	GSIERR("Q6 channel [%d] state =  %d\n", chan_idx, curr_state);
+}
+
 int gsi_halt_channel_ee(unsigned int chan_idx, unsigned int ee, int *code)
 {
 	enum gsi_generic_ee_cmd_opcode op = GSI_GEN_EE_CMD_HALT_CHANNEL;
@@ -4529,8 +4593,17 @@ int gsi_halt_channel_ee(unsigned int chan_idx, unsigned int ee, int *code)
 	}
 	if (gsi_ctx->scratch.word0.s.generic_ee_cmd_return_code == 0) {
 		GSIERR("No response received\n");
-		res = -GSI_STATUS_ERROR;
-		goto free_lock;
+		gsi_dump_halt_debug_reg(chan_idx, ee);
+		usleep_range(GSI_RESET_WA_MIN_SLEEP, GSI_RESET_WA_MAX_SLEEP);
+		GSIERR("Reading after usleep scratch 0 reg\n");
+		gsi_ctx->scratch.word0.val = gsi_readl(gsi_ctx->base +
+				GSI_EE_n_CNTXT_SCRATCH_0_OFFS(gsi_ctx->per.ee));
+		if (gsi_ctx->scratch.word0.s.generic_ee_cmd_return_code == 0) {
+			GSIERR("No response received second attempt\n");
+			gsi_dump_halt_debug_reg(chan_idx, ee);
+			res = -GSI_STATUS_ERROR;
+			goto free_lock;
+		}
 	}
 
 	res = GSI_STATUS_SUCCESS;
@@ -4759,9 +4832,12 @@ int gsi_flow_control_ee(unsigned int chan_idx, unsigned int ee,
 		msecs_to_jiffies(GSI_CMD_TIMEOUT));
 	if (res == 0) {
 		GSIERR("chan_idx=%u ee=%u timed out\n", chan_idx, ee);
-		res = -GSI_STATUS_TIMED_OUT;
-		GSI_ASSERT();
-		goto free_lock;
+		GSIERR("GSI_EE_n_CNTXT_GLOB_IRQ_EN_OFFS = 0x%x\n",
+				gsi_readl(gsi_ctx->base +
+				GSI_EE_n_CNTXT_GLOB_IRQ_EN_OFFS(gsi_ctx->per.ee)));
+		GSIERR("GSI_EE_n_CNTXT_GLOB_IRQ_STTS_OFFS IRQ type = 0x%x\n",
+				gsi_readl(gsi_ctx->base +
+				GSI_EE_n_CNTXT_GLOB_IRQ_STTS_OFFS(gsi_ctx->per.ee)));
 	}
 
 	gsi_ctx->scratch.word0.val = gsi_readl(gsi_ctx->base +
@@ -5052,6 +5128,69 @@ static union __packed gsi_channel_scratch __gsi_update_mhi_channel_scratch(
 	return scr;
 }
 
+/**
+ * gsi_get_hw_profiling_stats() - Query GSI HW profiling stats
+ * @stats:	[out] stats blob from client populated by driver
+ *
+ * Returns:	0 on success, negative on failure
+ *
+ */
+int gsi_get_hw_profiling_stats(struct gsi_hw_profiling_data *stats)
+{
+	if (stats == NULL) {
+		GSIERR("bad parms NULL stats == NULL\n");
+		return -EINVAL;
+	}
+
+	stats->bp_cnt = (u64)gsi_readl(gsi_ctx->base +
+						GSI_GSI_MCS_PROFILING_BP_CNT_LSB_OFFS) +
+						((u64)gsi_readl(gsi_ctx->base +
+						GSI_GSI_MCS_PROFILING_BP_CNT_MSB_OFFS) << 32);
+	stats->bp_and_pending_cnt = (u64)gsi_readl( gsi_ctx->base +
+						GSI_GSI_MCS_PROFILING_BP_AND_PENDING_CNT_LSB_OFFS) +
+						((u64)gsi_readl(gsi_ctx->base +
+						GSI_GSI_MCS_PROFILING_BP_AND_PENDING_CNT_MSB_OFFS)
+						<< 32);
+	stats->mcs_busy_cnt = (u64)gsi_readl(gsi_ctx->base +
+						GSI_GSI_MCS_PROFILING_MCS_BUSY_CNT_LSB_OFFS) +
+						((u64)gsi_readl(gsi_ctx->base +
+						GSI_GSI_MCS_PROFILING_MCS_BUSY_CNT_MSB_OFFS) << 32);
+	stats->mcs_idle_cnt = (u64)gsi_readl(gsi_ctx->base +
+						GSI_GSI_MCS_PROFILING_MCS_IDLE_CNT_LSB_OFFS) +
+						((u64)gsi_readl(gsi_ctx->base +
+						GSI_GSI_MCS_PROFILING_MCS_IDLE_CNT_MSB_OFFS) << 32);
+
+	return 0;
+}
+
+/**
+ * gsi_get_fw_version() - Query GSI FW version
+ * @ver:	[out] ver blob from client populated by driver
+ *
+ * Returns:	0 on success, negative on failure
+ *
+ */
+int gsi_get_fw_version(struct gsi_fw_version *ver)
+{
+	u32 raw = 0;
+
+	if (ver == NULL) {
+		GSIERR("bad parms: ver == NULL\n");
+		return -EINVAL;
+	}
+
+	raw = gsi_readl(gsi_ctx->base +
+		GSI_V2_5_GSI_INST_RAM_n_OFFS(GSI_INST_RAM_FW_VER_OFFSET));
+
+	ver->hw = (raw & GSI_INST_RAM_FW_VER_HW_MASK) >>
+				GSI_INST_RAM_FW_VER_HW_SHIFT;
+	ver->flavor = (raw & GSI_INST_RAM_FW_VER_FLAVOR_MASK) >>
+					GSI_INST_RAM_FW_VER_FLAVOR_SHIFT;
+	ver->fw = (raw & GSI_INST_RAM_FW_VER_FW_MASK) >>
+				GSI_INST_RAM_FW_VER_FW_SHIFT;
+
+	return 0;
+}
 
 static int msm_gsi_probe(struct platform_device *pdev)
 {
