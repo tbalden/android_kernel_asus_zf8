@@ -31,19 +31,25 @@ obj-m += asoc/codecs/bolero/
 obj-m += asoc/codecs/csra66x0/
 obj-m += asoc/codecs/ep92/
 endif
+ifeq ($(TARGET_SUPPORT), $(filter $(TARGET_SUPPORT), qrbx210))
+obj-m += asoc/codecs/rouleur/
+obj-m += asoc/codecs/bolero/
+obj-m += asoc/codecs/wcd937x/
+KBUILD_CFLAGS += -Wno-error
+endif
 ifeq ($(TARGET_SUPPORT), sdmsteppe)
 obj-m += asoc/codecs/bolero/
 obj-m += asoc/codecs/wcd937x/
 endif
 
-ifeq ($(TARGET_SUPPORT), $(filter $(TARGET_SUPPORT), sa8155 sa8155ivi sa6155 sa8195 qtiquingvm qtiquingvm8295))
+ifeq ($(TARGET_SUPPORT), $(filter $(TARGET_SUPPORT), sa8155 sa8155ivi sa6155 sa8195 qtiquingvm qtiquingvm8295 sa8295))
 KBUILD_OPTIONS += CONFIG_SND_SOC_AUTO=y
 obj-m := ipc/
 obj-m += dsp/
 obj-m += asoc/
 obj-m += asoc/codecs/
 obj-m += soc/
-ifeq ($(TARGET_SUPPORT), $(filter $(TARGET_SUPPORT), sa8155 sa8155ivi sa8195))
+ifeq ($(TARGET_SUPPORT), $(filter $(TARGET_SUPPORT), sa8155 sa8155ivi sa8195 sa8295))
 KBUILD_OPTIONS += CONFIG_SND_SOC_SA8155=m
 endif
 ifeq ($(TARGET_SUPPORT), $(filter $(TARGET_SUPPORT), sa6155))
