@@ -710,6 +710,7 @@ static void run_resetprops(void) {
 			pr_err("Couldn't set device props! %d", ret);
 		}
 #ifdef USE_LOCK_HIDE
+		ret = call_userspace(BIN_RESETPROP, "ro.boot.flash.locked", "1", "resetprop verifiedbootstate");
 		ret = call_userspace(BIN_RESETPROP, "ro.boot.vbmeta.device_state", "locked", "resetprop verifiedbootstate");
 		ret = call_userspace(BIN_RESETPROP, "ro.boot.verifiedbootstate", "green", "resetprop verifiedbootstate");
 		ret = call_userspace(BIN_RESETPROP, "ro.boot.veritymode", "enforcing", "resetprop verifiedbootstate");
