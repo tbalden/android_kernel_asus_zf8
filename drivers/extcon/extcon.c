@@ -688,7 +688,7 @@ int asus_extcon_sync(struct extcon_dev *edev)
 }
 EXPORT_SYMBOL_GPL(asus_extcon_sync);
 
-bool boot_completed_flag = 1;
+bool boot_completed_flag = 0;
 int asus_extcon_set_state(struct extcon_dev *edev, int cable_state)
 {
 	unsigned long flags;
@@ -699,7 +699,7 @@ int asus_extcon_set_state(struct extcon_dev *edev, int cable_state)
 	spin_lock_irqsave(&edev->lock, flags);
 
 	/* Check whether the external connector's state is changed. */
-	if (!asus_is_extcon_changed(edev, cable_state) || !boot_completed_flag)
+	if (!asus_is_extcon_changed(edev, cable_state))
 		goto out;
 
 	/* Don't check mutual exclusiveness & property since the state no longer represents multi-cable. */
@@ -722,9 +722,11 @@ int asus_extcon_set_state_sync(struct extcon_dev *edev, int cable_state)
 	printk("[BAT]asus_is_extcon_changed");
 	ret = asus_is_extcon_changed(edev, cable_state);
 	printk("[BAT]%d",ret);
+	printk("boot_completed_flag=%d",boot_completed_flag);
 	spin_unlock_irqrestore(&edev->lock, flags);
-	if (!ret)
+	if (!ret && boot_completed_flag == 0)
 		return 0;
+	boot_completed_flag = 0;
 	printk("[BAT]asus_extcon_set_state");
 	ret = asus_extcon_set_state(edev, cable_state);
 	if (ret < 0)

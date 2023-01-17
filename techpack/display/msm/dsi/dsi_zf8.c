@@ -6,6 +6,7 @@
 #include <linux/string.h>
 #include <linux/syscalls.h>
 #include <drm/drm_zf8.h>
+#include <linux/device.h>
 
 #include "dsi_zf8.h"
 
@@ -206,41 +207,66 @@ static int dsi_zf8_set_hbm(struct dsi_panel *panel, int enable)
 	if (!panel->panel_initialized)
 		goto exit;
 
-	if (1 == enable) {
+	if (enable > 0) {
+		if (enable == 3) {
+			DSI_LOG("[%s] send DSI_CMD_SET_HDR_HBM_ON cmd \n",panel->name);
+			rc = dsi_zf8_tx_cmd_set(panel, DSI_CMD_SET_HDR_HBM_ON);
+			if (rc)
+				DSI_LOG("[%s] failed to send DSI_CMD_SET_HDR_HBM_ON cmd, rc=%d\n",
+					panel->name, rc);
+		} else if (enable == 2) {
 #if defined ASUS_SAKE_PROJECT
-		if(1 == g_lcd_stage_id) {
-			DSI_LOG("[%s] send DSI_CMD_SET_HBM_ON cmd \n",panel->name);
-			rc = dsi_zf8_tx_cmd_set(panel, DSI_CMD_SET_HBM_ON);
+			if(1 == g_lcd_stage_id) {
+				DSI_LOG("[%s] send DSI_CMD_SET_ER1_CAM_HBM_ON cmd \n",panel->name);
+				rc = dsi_zf8_tx_cmd_set(panel, DSI_CMD_SET_ER1_CAM_HBM_ON);
+			} else {
+				DSI_LOG("[%s] send DSI_CMD_SET_ER2_CAM_HBM_ON cmd \n",panel->name);
+				rc = dsi_zf8_tx_cmd_set(panel, DSI_CMD_SET_ER2_CAM_HBM_ON);
+			}
+			if (rc)
+				DSI_LOG("[%s] failed to send DSI_CMD_SET_CAM_HBM_ON cmd, rc=%d\n",
+					panel->name, rc);
+#endif
 		} else {
-			DSI_LOG("[%s] send DSI_CMD_SET_HBM_ER2_ON cmd \n",panel->name);
-			rc = dsi_zf8_tx_cmd_set(panel, DSI_CMD_SET_HBM_ER2_ON);
-		}
+#if defined ASUS_SAKE_PROJECT
+			if(1 == g_lcd_stage_id) {
+				DSI_LOG("[%s] send DSI_CMD_SET_HBM_ON cmd \n",panel->name);
+				rc = dsi_zf8_tx_cmd_set(panel, DSI_CMD_SET_HBM_ON);
+			} else {
+				DSI_LOG("[%s] send DSI_CMD_SET_HBM_ER2_ON cmd \n",panel->name);
+				rc = dsi_zf8_tx_cmd_set(panel, DSI_CMD_SET_HBM_ER2_ON);
+			}
 #else
-		rc = dsi_zf8_tx_cmd_set(panel, DSI_CMD_SET_HBM_ON);
+			rc = dsi_zf8_tx_cmd_set(panel, DSI_CMD_SET_HBM_ON);
 #endif
-		if (rc)
-			DSI_LOG("[%s] failed to send DSI_CMD_SET_HBM_ON cmd, rc=%d\n",
-				   panel->name, rc);
-	}
-#if defined ASUS_SAKE_PROJECT
-	else if(2 == enable) {
-		if(1 == g_lcd_stage_id) {
-			DSI_LOG("[%s] send DSI_CMD_SET_ER1_CAM_HBM_ON cmd \n",panel->name);
-			rc = dsi_zf8_tx_cmd_set(panel, DSI_CMD_SET_ER1_CAM_HBM_ON);
-		} else {
-			DSI_LOG("[%s] send DSI_CMD_SET_ER2_CAM_HBM_ON cmd \n",panel->name);
-			rc = dsi_zf8_tx_cmd_set(panel, DSI_CMD_SET_ER2_CAM_HBM_ON);
+			if (rc)
+				DSI_LOG("[%s] failed to send DSI_CMD_SET_HBM_ON cmd, rc=%d\n",
+					panel->name, rc);
 		}
-		if (rc)
-			DSI_LOG("[%s] failed to send DSI_CMD_SET_CAM_HBM_ON cmd, rc=%d\n",
-				   panel->name, rc);
-	}
-#endif
-	else {
-		rc = dsi_zf8_tx_cmd_set(panel, DSI_CMD_SET_HBM_OFF);
-		if (rc)
-			DSI_LOG("[%s] failed to send DSI_CMD_SET_HBM_ON cmd, rc=%d\n",
-				   panel->name, rc);
+	} else {
+		if (g_display->panel->panel_hbm_mode == 3) {
+			DSI_LOG("[%s] send DSI_CMD_SET_HDR_HBM_OFF cmd \n",panel->name);
+			rc = dsi_zf8_tx_cmd_set(panel, DSI_CMD_SET_HDR_HBM_OFF);
+			if (rc)
+				DSI_LOG("[%s] failed to send DSI_CMD_SET_HDR_HBM_OFF cmd, rc=%d\n",
+					panel->name, rc);
+			g_display->panel->panel_hbm_mode = 0;
+			dsi_zf8_restore_backlight();
+		} else if (g_display->panel->panel_hbm_mode > 0) {
+			DSI_LOG("[%s] send DSI_CMD_SET_HBM_OFF cmd \n",panel->name);
+			rc = dsi_zf8_tx_cmd_set(panel, DSI_CMD_SET_HBM_OFF);
+			if (rc)
+				DSI_LOG("[%s] failed to send DSI_CMD_SET_HBM_OFF cmd, rc=%d\n",
+					panel->name, rc);
+			g_display->panel->panel_hbm_mode = 0;
+			dsi_zf8_restore_backlight();
+		} else {
+			DSI_LOG("[%s] send DSI_CMD_SET_HBM_OFF cmd \n",panel->name);
+			rc = dsi_zf8_tx_cmd_set(panel, DSI_CMD_SET_HBM_OFF);
+			if (rc)
+				DSI_LOG("[%s] failed to send DSI_CMD_SET_HBM_OFF cmd, rc=%d\n",
+					panel->name, rc);
+		}
 	}
 exit:
 	mutex_unlock(&panel->panel_lock);
@@ -253,11 +279,10 @@ static void display_set_hbm_mode(int mode)
 		DSI_LOG("hbm mode same.\n");
 		return;
 	}
+	DSI_LOG("hbm mode set from (%d) to (%d)\n", g_display->panel->panel_hbm_mode, mode);
 
-	g_display->panel->panel_hbm_mode = mode;
-	
-	DSI_LOG("hbm mode is (%d)\n", g_display->panel->panel_hbm_mode);
 	dsi_zf8_set_hbm(g_display->panel, mode);
+	g_display->panel->panel_hbm_mode = mode;
 }
 
 // panel fps read
@@ -671,17 +696,9 @@ static ssize_t hbm_mode_write(struct file *filp, const char *buff, size_t len, l
 			(g_display->panel->allow_panel_fod_hbm == 0)) {
 		if (strncmp(messages, "0", 1) == 0) {
 			display_set_hbm_mode(0);
-		} else if (strncmp(messages, "1", 1) == 0) {
-			display_set_hbm_mode(1);
+		} else {
+			display_set_hbm_mode(messages[0]-'0');
 		} 
-#if defined ASUS_SAKE_PROJECT
-		else if (strncmp(messages, "2", 1) == 0) {
-			display_set_hbm_mode(2);
-		}
-#endif
-		else {
-			DSI_LOG("don't match any hbm mode.\n");
-		}
 	} else {
 		DSI_LOG("unable to set in display off\n");
 		g_display->panel->panel_hbm_mode = 0;
@@ -1048,10 +1065,74 @@ void dsi_zf8_frame_commit_cnt(struct drm_crtc *crtc)
 	}
 }
 
+static ssize_t hbm_mode_show(struct class *class,
+					struct class_attribute *attr,
+					char *buf)
+{
+	return sprintf(buf, "%d\n", g_display->panel->panel_hbm_mode);
+}
+
+static ssize_t hbm_mode_store(struct class *class,
+					struct class_attribute *attr,
+					const char *buf, size_t count)
+{
+	if (!count)
+		return -EINVAL;
+
+	if (g_display->panel->panel_is_on &&
+			(g_display->panel->allow_panel_fod_hbm == 0)) {
+		if (strncmp(buf, "0", 1) == 0) {
+			display_set_hbm_mode(0);
+		} else {
+			display_set_hbm_mode(buf[0]-'0');
+		}
+	} else {
+		DSI_LOG("unable to set in display off\n");
+		g_display->panel->panel_hbm_mode = 0;
+	}
+
+	return count;
+}
+
+static CLASS_ATTR_RW(hbm_mode);
+
+static void drm_class_device_release(struct device *dev)
+{
+	pr_err("[Display] release asus drm\n");
+}
+
+static struct device_type drm_class_type = {
+	.name = "asus_fod",
+};
+
+static struct device drm_dev = {
+	.type = &drm_class_type,
+	.release = &drm_class_device_release
+};
+
+static void dsi_create_drm_class_obj(void)
+{
+	int err;
+	err = dev_set_name(&drm_dev, "asus_fod");
+	if (err != 0) {
+		pr_err("[Display] Fail to create asus fod\n");
+		return;
+	}
+
+	drm_dev.class = class_create(THIS_MODULE, "asus_fod");
+
+	err = class_create_file(drm_dev.class, &class_attr_hbm_mode);
+	if (err) {
+		pr_err("[Display] Fail to create hbm_mode file node\n");
+	}
+}
+
 // to initial asus display parameters
 void dsi_zf8_display_init(struct dsi_display *display)
 {
 	DSI_LOG("dsi_zf8_display_init  !\n ");
+	dsi_create_drm_class_obj();
+
 	g_display = display;
 	dsi_zf8_parse_panel_vendor_id(g_display->panel);
 
@@ -1141,16 +1222,16 @@ void dsi_zf8_record_backlight(u32 bl_lvl)
 		
 		if(g_display->panel->panel_last_backlight == 248) {
 			if(g_display->panel->aod_mode == 1)
-				g_display->panel->panel_last_backlight = 4;
+				g_display->panel->panel_last_backlight = 1;
 			else if(g_display->panel->aod_mode == 2)
-				g_display->panel->panel_last_backlight = 64;
+				g_display->panel->panel_last_backlight = 61;
 			else 
 				DSI_LOG("Can not run here , This is a Bug!\n");
 		}
 		
 		//DSI_LOG("AOD last_backlight = %d \n", g_display->panel->panel_last_backlight);
 		DSI_LOG("Will enter AOD Mode !\n");
-		if(g_display->panel->panel_last_backlight > 4) {
+		if(g_display->panel->panel_last_backlight > 1) {
 			
 #if defined ASUS_SAKE_PROJECT
 			if(1 == g_lcd_stage_id) {
@@ -1166,7 +1247,7 @@ void dsi_zf8_record_backlight(u32 bl_lvl)
 #endif
 			DSI_LOG("set aod_mode 2 \n");
 			g_display->panel->aod_mode = 2;
-	     } else if (g_display->panel->panel_last_backlight == 4) {
+	     } else if (g_display->panel->panel_last_backlight == 1) {
 #if defined ASUS_SAKE_PROJECT
 			if(1 == g_lcd_stage_id) {
 					rc = dsi_zf8_tx_cmd_set(g_display->panel, DSI_CMD_SET_AOD_LOW);
@@ -1182,7 +1263,7 @@ void dsi_zf8_record_backlight(u32 bl_lvl)
 			DSI_LOG("set aod_mode 1 \n");
 			g_display->panel->aod_mode = 1;
 	    }
-		// for non 4 / 64 bl && aod on state, prevent display keep off
+		// for non 1 / 61 bl && aod on state, prevent display keep off
 		else if(g_display->panel->aod_state){
 			DSI_LOG("Send DSI_CMD_SET_AOD_OTHER !\n");
 			rc = dsi_zf8_tx_cmd_set(g_display->panel, DSI_CMD_SET_AOD_OTHER);
@@ -1331,10 +1412,9 @@ void zf8_atomic_set_spot_status(int type)
 
 // add for set min backlight to 2
 u32 dsi_zf8_backlightupdate(u32 bl_lvl){
-	if (bl_lvl == 1) {
-		return 2;
-	}
-	else {
+	if (bl_lvl >= 1 && bl_lvl < 4) {
+		return 4;
+	} else {
 		return bl_lvl;
 	}
 }

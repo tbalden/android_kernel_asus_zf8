@@ -696,7 +696,7 @@ static int dsi_panel_update_backlight(struct dsi_panel *panel,
 #endif
 
 	/* ASUS BSP Display +++ */
-	DSI_LOG("set bl=%d\n", bl_lvl);
+	DSI_LOG("[From] set bl=%d\n", bl_lvl);
 
 #ifdef CONFIG_UCI
 	last_brightness= bl_lvl;
@@ -710,12 +710,20 @@ static int dsi_panel_update_backlight(struct dsi_panel *panel,
 #endif
 	dsi_anakin_record_backlight(bl_lvl);
 	dsi_zf8_record_backlight(bl_lvl);
+
+	if (panel->panel_hbm_mode > 0) {
+		DSI_LOG("hbm mode %d no bl\n", panel->panel_hbm_mode);
+		return rc;
+	}
+
 	dsi_zf8_set_dimming_smooth(panel, bl_lvl);
 
 	// always 0 except project Anakin & Picasso
 	if (panel->allow_panel_fod_hbm == 1)
 		return rc;
 	bl_lvl = dsi_anakin_backlightupdate(bl_lvl);
+	bl_lvl = dsi_zf8_backlightupdate(bl_lvl);
+	DSI_LOG("[To] set bl=%d\n", bl_lvl);
 	/* ASUS BSP Display --- */
 
 	if (panel->bl_config.bl_inverted_dbv)
@@ -1930,6 +1938,8 @@ const char *cmd_set_prop_map[DSI_CMD_SET_MAX] = {
 	"qcom,mdss-dsi-fod-hbm-on-command",
 	"qcom,mdss-dsi-fod-ER2-hbm-on-command",
 	"qcom,mdss-dsi-fod-hbm-off-command",
+	"qcom,mdss-dsi-hdr-hbm-on-command",
+	"qcom,mdss-dsi-hdr-hbm-off-command",
 	"qcom,mdss-dsi-nolp-ER2-command",
 	"qcom,mdss-dsi-nolp-ER2-FOD-command",
 	"qcom,mdss-dsi-aod-low-command",
@@ -1978,6 +1988,8 @@ const char *cmd_set_state_map[DSI_CMD_SET_MAX] = {
 	"qcom,mdss-dsi-fod-hbm-on-command-state",
 	"qcom,mdss-dsi-fod-ER2-hbm-on-command-state",
 	"qcom,mdss-dsi-fod-hbm-off-command-state",
+	"qcom,mdss-dsi-hdr-hbm-on-command-state",
+	"qcom,mdss-dsi-hdr-hbm-off-command-state",
 	"qcom,mdss-dsi-nolp-ER2-command-state",
 	"qcom,mdss-dsi-nolp-ER2-FOD-command-state",
 	"qcom,mdss-dsi-aod-low-command-state",

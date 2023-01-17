@@ -52,6 +52,8 @@ extern int battery_chg_write(struct battery_chg_dev *bcdev, void *data, int len)
 extern int asus_extcon_set_state_sync(struct extcon_dev *edev, int cable_state);
 extern int asus_extcon_get_state(struct extcon_dev *edev);
 extern bool g_Charger_mode;
+extern bool boot_completed_flag;
+extern char *saved_command_line;
 //[---] Add the external function
 
 extern void qti_charge_notify_device_charge(void);
@@ -1063,6 +1065,12 @@ static ssize_t demo_app_status_store(struct class *c,
     ChgPD_Info.demo_app_status = tmp;
 
     tmp = ChgPD_Info.ultra_bat_life|ChgPD_Info.demo_app_status;
+//mtbf+
+    if(ChgPD_Info.b_is_MTBF_device == true && tmp == 1){
+        CHG_DBG_E("%s. MTBF device matched,cancel Batt_Protection : %d,tmp: %d", __func__, ChgPD_Info.b_is_MTBF_device, tmp);
+        return count;
+    }
+//mtbf-
     CHG_DBG("%s. set BATTMAN_OEM_Batt_Protection : %d", __func__, tmp);
     rc = oem_prop_write(BATTMAN_OEM_Batt_Protection, &tmp, 1);
     if (rc < 0) {
@@ -1090,6 +1098,12 @@ static ssize_t ultra_bat_life_store(struct class *c,
     ChgPD_Info.ultra_bat_life = tmp;
 
     tmp = ChgPD_Info.ultra_bat_life||ChgPD_Info.demo_app_status;
+//mtbf+
+    if(ChgPD_Info.b_is_MTBF_device == true && tmp == 1){
+        CHG_DBG_E("%s. MTBF device matched,cancel Batt_Protection : %d,tmp: %d", __func__, ChgPD_Info.b_is_MTBF_device, tmp);
+        return count;
+    }
+//mtbf-
     CHG_DBG("%s. set BATTMAN_OEM_Batt_Protection : %d", __func__, tmp);
     rc = oem_prop_write(BATTMAN_OEM_Batt_Protection, &tmp, 1);
     if (rc < 0) {
@@ -1179,9 +1193,10 @@ static ssize_t boot_completed_store(struct class *c,
     tmp = simple_strtol(buf, NULL, 10);
 
     ChgPD_Info.boot_completed = tmp;
+    boot_completed_flag = tmp;
 
     cancel_delayed_work_sync(&asus_set_qc_state_work);
-    schedule_delayed_work(&asus_set_qc_state_work, msecs_to_jiffies(5000));
+    schedule_delayed_work(&asus_set_qc_state_work, msecs_to_jiffies(0));
 
     return count;
 }
@@ -3316,6 +3331,7 @@ int asuslib_init(void) {
     int rc = 0;
     struct pmic_glink_client_data client_data = { };
     struct pmic_glink_client    *client;
+    u32 tmp = 0;
 
     printk(KERN_ERR "%s +++\n", __func__);
     // Initialize the necessary power supply
@@ -3511,15 +3527,45 @@ int asuslib_init(void) {
     battery_health_data_reset();
     schedule_delayed_work(&battery_health_work, 30 * HZ);
 
+//MTBF+
+    if (strstr(saved_command_line, "androidboot.serialno=M4AIB7N004649M6")
+    || strstr(saved_command_line, "androidboot.serialno=V1031800059")
+    || strstr(saved_command_line, "androidboot.serialno=LCAIB7N010618KE")
+    || strstr(saved_command_line, "androidboot.serialno=LCAIB7N010839V7")
+    || strstr(saved_command_line, "androidboot.serialno=LCAIB7N00943EFN")
+    || strstr(saved_command_line, "androidboot.serialno=LCAIB7N01429DYV")
+    || strstr(saved_command_line, "androidboot.serialno=LCAIB7N00472GBN")
+    || strstr(saved_command_line, "androidboot.serialno=M1AIB7N01397HYA")
+    || strstr(saved_command_line, "androidboot.serialno=LCAIB7N01303GY2")
+    || strstr(saved_command_line, "androidboot.serialno=LCAIB7N00285FXH"))
+    {
+        CHG_DBG_E("MTBF device matched");
+        ChgPD_Info.b_is_MTBF_device = true;
+        tmp = 1;
+    } else {
+        ChgPD_Info.b_is_MTBF_device = false;
+        tmp = 0;
+    }
+    oem_prop_write(BATTMAN_OEM_Set_MTBF, &tmp, 1);
+
+    if(ChgPD_Info.b_is_MTBF_device == true)
+    {
+        CHG_DBG_E("Load the asuslib_init Succesfully,cancel battery 48hours protect\n");
+        g_asuslib_init = true;
+        return rc;
+    }
+//MTBF-
+
     //cos battery 48hours protect
     INIT_DELAYED_WORK(&asus_min_check_work, asus_min_check_worker);
     if(g_Charger_mode) {
-	CHG_DBG_E("Charger mode , start asus timer monitor\n");
-    	schedule_delayed_work(&asus_min_check_work, msecs_to_jiffies(60000));
+       CHG_DBG_E("Charger mode , start asus timer monitor\n");
+       schedule_delayed_work(&asus_min_check_work, msecs_to_jiffies(60000));
     }
 
     CHG_DBG_E("Load the asuslib_init Succesfully\n");
     g_asuslib_init = true;
+
     return rc;
 }
 

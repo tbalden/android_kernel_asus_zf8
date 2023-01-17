@@ -1579,8 +1579,16 @@ static int haptics_open_loop_drive_config(struct haptics_chip *chip, bool en)
 static int haptics_enable_play(struct haptics_chip *chip, bool en)
 {
 	struct haptics_play_info *play = &chip->play;
-	int rc;
-	u8 val;
+	int rc = 0;
+	u8 val = 0;
+
+	rc = haptics_read(chip, chip->cfg_addr_base,
+				HAP_CFG_FAULT_STATUS_REG, &val, 1);
+	if (rc < 0)
+		printk("haptic_d: %s: HAP_CFG_FAULT_STATUS_REG read fail.\n",
+			__func__);
+	printk("haptic_d: %s: HAP_CFG_FAULT_STATUS_REG = 0x%02x\n",
+			__func__, val);
 
 	if (en) {
 		val = SC_CLR_BIT | AUTO_RES_ERR_CLR_BIT |
@@ -1602,6 +1610,8 @@ static int haptics_enable_play(struct haptics_chip *chip, bool en)
 	if (en)
 		val |= PLAY_EN_BIT;
 
+	printk("haptic_d: %s: write to HAP_CFG_SPMI_PLAY_REG = 0x%02x\n",
+			__func__, val);
 	rc = haptics_write(chip, chip->cfg_addr_base,
 			HAP_CFG_SPMI_PLAY_REG, &val, 1);
 	if (rc < 0) {
